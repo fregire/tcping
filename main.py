@@ -1,89 +1,74 @@
 from struct import pack
 import socket
 import sys
+import scapy
+
+
+def get_checksum(header):
+
+	return 0
 
 
 
-LOCAL_PORT = 23011
-LOCAL_HOST = '127.0.0.1'
-
-
-def checksum(msg):
-	msg = str(msg)
-	s = 0
-	for i in range(0, len(msg), 2):
-		if (i+1) < len(msg):
-		    a = ord(msg[i]) 
-		    b = ord(msg[i+1])
-		    s = s + (a+(b << 8))
-		elif (i+1)==len(msg):
-		    s += ord(msg[i])
-		else:
-		    raise "Something Wrong here"
-
-	s = (s>>16) + (s & 0xffff);
-	s = ~s & 0xffff
-
-	return s
-
-
-def get_ip_header(source_ip, dest_ip):
-	# ip header fields
-	ihl = 5
+def get_ip_header(src_ip, dest_ip):
+	IP_HEADER_MASK = '!BBHHHBBH4s4s'
 	version = 4
-	tos = 0
-	tot_len = 20 + 20	
-	id = 54321	
-	frag_off = 0
+	ihl = 5
+	version_ihl = (version << 4) + ihl
+	dscp_ecn = 0
+	packet_len = 20
+	identificator = 1
+
+	# flags
+	first_flag = 0
+	df = 1
+	mf = 0
+	flags = (df << 1) + mf
+
+	fragment_offset = 0
+	flags_offset = (flags << 13) + fragment_offset
 	ttl = 255
-	protocol = socket.IPPROTO_TCP
-	check = 10	
-	saddr = socket.inet_aton ( source_ip )
-	daddr = socket.inet_aton ( dest_ip )
+	proto = socket.IPPROTO_TCP
+	checksum = 0
+	src_ip = socket.inet_aton(src_ip)
+	dest_ip = socket.inet_aton(dest_ip)
 
-	ihl_version = (version << 4) + ihl
-	ip_header = pack('!BBHHHBBH4s4s' , ihl_version, tos, tot_len, id, frag_off, ttl, protocol, check, saddr, daddr)
+	packet_without_checksum = pack(IP_HEADER_MASK, version_ihl, dscp_ecn, packet_len, identificator, flags_offset, ttl, proto, checksum, src_ip, dest_ip)
 
-	return ip_header
+	return packet_without_checksum
 
 
-def get_syn_packet(source_ip, source_port, dest_ip, dest_port):
-	packet = '';
-	ip_header = get_ip_header(source_ip, dest_ip)
-	
+def get_tcp_header(source_ip,  source_port, dest_ip, dest_port):
+	source_ip = socket.inet_aton(source_ip)
+	dest_ip = socket.inet_aton(dest_ip)
 
-	# tcp header fields	
-	seq = 10
-	ack_seq = 0
-	doff = 5
-	#tcp flags
-	fin = rst = psh = ack = urg = 0
+	sn = 0
+	ack = 0
+	header_len = 5
+	reservered = 0
+
+	#flags
+	urg = 0
+	ack = 0
+	psh = 0
+	rst = 0
 	syn = 1
-	window = socket.htons(5840)
-	check = 0
-	urg_ptr = 0
+	fin = 0
+	flags = (urg << 5) + (ack << 4) + (psh << 3) + (rst << 2) + (syn << 1) + fin
 
-	offset_res = (doff << 4) + 0
-	tcp_flags = fin + (syn << 1) + (rst << 2) + (psh <<3) + (ack << 4) + (urg << 5)
+	header_flags = (header_len << 12) + flags
+	window_size = 64240
+	checksum = 0
+	urgent_pointer = 0
+	tcp_header = pack('!HHIIHHHH', source_port, dest_port, sn, ack, header_flags, window_size, checksum, urgent_pointer)
 
-	tcp_header = pack('!HHLLBBHHH' , source_port, dest_port, seq, ack_seq, offset_res, tcp_flags,  window, check, urg_ptr)
-
-	source_address = socket.inet_aton(source_ip)
-	dest_address = socket.inet_aton(dest_ip)
-	placeholder = 0
 	protocol = socket.IPPROTO_TCP
-	tcp_length = len(tcp_header)
+	pseudo_header = pack('!4s4sBBH', source_ip, dest_ip, 0, protocol, len(tcp_header))
 
-	psh = pack('!4s4sBBH' , source_address , dest_address , placeholder , protocol , tcp_length);
-	psh = psh + tcp_header;
+	header = pseudo_header + tcp_header
+	checksum = get_checksum(header)
 
-	tcp_checksum = checksum(psh)
-
-	tcp_header = pack('!HHLLBBHHH' , source_port, dest_port, seq, ack_seq, offset_res, tcp_flags,  window, tcp_checksum , urg_ptr)
-
-	packet = ip_header + tcp_header
-
-	return packet
+	return pack('!HHIIHHHH', source_port, dest_port, sn, ack, header_flags, window_size, checksum, urgent_pointer)
 
 
 def parse_args():
@@ -98,22 +83,16 @@ def parse_args():
 
 
 def main():
-	#main.py host_name port
-	#checksum и get_syn_packet взяты с https://www.binarytides.com/raw-socket-programming-in-python-linux/
 	s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
 	s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-	dest_host_name, dest_port = parse_args()
-	dest_ip = socket.gethostbyname(dest_host_name) 
-	dest_port = 80 if dest_port is None else dest_port
+	dest_ip = '64.233.165.139'
+	dest_port = 80
+	src_ip = '192.168.106'
+	src_port = 3228
+	packet = get_ip_header(src_ip, dest_ip) + get_tcp_header(src_ip, src_port, dest_ip, dest_port)
+	print(packet)
 
-	packet = get_syn_packet(LOCAL_HOST, LOCAL_PORT, dest_ip, dest_port)
-
-	s.sendto(packet, (dest_ip, 0))
-	'''
-	while True:
-		data = s.recvfrom(1024)
-		print(data)
-	'''
+	s.sendto(packet, (dest_ip, dest_port))
 
 
 if __name__ == '__main__':
