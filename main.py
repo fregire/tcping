@@ -4,10 +4,21 @@ import sys
 import scapy
 
 
+	
 def get_checksum(header):
+	s = 0
+	hex_header = int(header.hex(), 16)
+	while hex_header > 0:
+		s += hex_header & 0xFFFF
+		hex_header = hex_header >> 16
 
-	return 0
-
+	result = 0
+	while s > 0:
+		result += s & 0xFFFF
+		s = s >> 16
+	result ^= 0xFFFF
+	
+	return result
 
 
 def get_ip_header(src_ip, dest_ip):
@@ -65,6 +76,7 @@ def get_tcp_header(source_ip,  source_port, dest_ip, dest_port):
 	protocol = socket.IPPROTO_TCP
 	pseudo_header = pack('!4s4sBBH', source_ip, dest_ip, 0, protocol, len(tcp_header))
 
+
 	header = pseudo_header + tcp_header
 	checksum = get_checksum(header)
 
@@ -89,7 +101,10 @@ def main():
 	dest_port = 80
 	src_ip = '192.168.106'
 	src_port = 3228
-	packet = get_ip_header(src_ip, dest_ip) + get_tcp_header(src_ip, src_port, dest_ip, dest_port)
+	ip_header = get_ip_header(src_ip, dest_ip)
+	print(get_checksum(ip_header))
+	tcp_header = get_tcp_header(src_ip, src_port, dest_ip, dest_port)
+	packet = ip_header + tcp_header
 	print(packet)
 
 	s.sendto(packet, (dest_ip, dest_port))
