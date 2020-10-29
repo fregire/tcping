@@ -1,8 +1,6 @@
 from struct import pack
 import socket
 import sys
-import scapy
-
 
 	
 def get_checksum(header):
@@ -49,8 +47,8 @@ def get_ip_header(src_ip, dest_ip):
 	return packet_without_checksum
 
 
-def get_tcp_header(source_ip,  source_port, dest_ip, dest_port):
-	source_ip = socket.inet_aton(source_ip)
+def get_tcp_header(src_ip,  src_port, dest_ip, dest_port):
+	src_ip = socket.inet_aton(src_ip)
 	dest_ip = socket.inet_aton(dest_ip)
 
 	sn = 0
@@ -71,16 +69,16 @@ def get_tcp_header(source_ip,  source_port, dest_ip, dest_port):
 	window_size = 64240
 	checksum = 0
 	urgent_pointer = 0
-	tcp_header = pack('!HHIIHHHH', source_port, dest_port, sn, ack, header_flags, window_size, checksum, urgent_pointer)
+	tcp_header = pack('!HHIIHHHH', src_port, dest_port, sn, ack, header_flags, window_size, checksum, urgent_pointer)
 
 	protocol = socket.IPPROTO_TCP
-	pseudo_header = pack('!4s4sBBH', source_ip, dest_ip, 0, protocol, len(tcp_header))
+	pseudo_header = pack('!4s4sBBH', src_ip, dest_ip, 0, protocol, len(tcp_header))
 
 
 	header = pseudo_header + tcp_header
 	checksum = get_checksum(header)
 
-	return pack('!HHIIHHHH', source_port, dest_port, sn, ack, header_flags, window_size, checksum, urgent_pointer)
+	return pack('!HHIIHHHH', src_port, dest_port, sn, ack, header_flags, window_size, checksum, urgent_pointer)
 
 
 def parse_args():
@@ -91,23 +89,46 @@ def parse_args():
 	if len(args) > 2:
 		port = args[2]
 
-	return ip, port
+	return ip, int(port)
 
+
+def get_packet(src_ip, src_port, dest_ip, dest_port):
+	ip_header = get_ip_header(src_ip, dest_ip)
+	tcp_header = get_tcp_header(src_ip, src_port, dest_ip, dest_port)
+
+	return ip_header + tcp_header
+
+
+def get_curr_addr():
+	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	random_ip = '10.255.255.255'
+	random_port = 0
+	try:
+	    # doesn't even have to be reachable
+	    s.connect((random_ip, random_port))
+	    IP = s.getsockname()[0]
+	    PORT = s.getsockname()[1]
+	except Exception:
+	    IP = '127.0.0.1'
+	    PORT = 6
+	finally:
+	    s.close()
+
+	return IP, PORT
 
 def main():
 	s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
 	s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-	dest_ip = '64.233.165.139'
-	dest_port = 80
-	src_ip = '192.168.106'
-	src_port = 3228
-	ip_header = get_ip_header(src_ip, dest_ip)
-	print(get_checksum(ip_header))
-	tcp_header = get_tcp_header(src_ip, src_port, dest_ip, dest_port)
-	packet = ip_header + tcp_header
-	print(packet)
+	dest_ip, dest_port = parse_args()
+	dest_ip = socket.gethostbyname(dest_ip)
+	src_ip, src_port = get_curr_addr()
+	packet = get_packet(src_ip, src_port, dest_ip, dest_port)
 
 	s.sendto(packet, (dest_ip, dest_port))
+
+	while True:
+		data = s.recvfrom(1024)
+		print(data)
 
 
 if __name__ == '__main__':
