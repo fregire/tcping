@@ -1,3 +1,0 @@
-dig google.com ANY  возвращает все записи на dns сервере о данном url
-? Почему destination и source локальные?
-socket - интерфейс трансп уровня
