@@ -1,8 +1,10 @@
-from struct import pack
+from struct import pack, unpack
 import socket
 import sys
+from packet import Packet
+import random
 
-	
+
 def get_checksum(header):
 	s = 0
 	hex_header = int(header.hex(), 16)
@@ -19,7 +21,7 @@ def get_checksum(header):
 	return result
 
 
-def get_ip_header(src_ip, dest_ip):
+def get_ip_header(src_ip, dst_ip):
 	IP_HEADER_MASK = '!BBHHHBBH4s4s'
 	version = 4
 	ihl = 5
@@ -40,45 +42,45 @@ def get_ip_header(src_ip, dest_ip):
 	proto = socket.IPPROTO_TCP
 	checksum = 0
 	src_ip = socket.inet_aton(src_ip)
-	dest_ip = socket.inet_aton(dest_ip)
+	dst_ip = socket.inet_aton(dst_ip)
 
-	packet_without_checksum = pack(IP_HEADER_MASK, version_ihl, dscp_ecn, packet_len, identificator, flags_offset, ttl, proto, checksum, src_ip, dest_ip)
+	packet_without_checksum = pack(IP_HEADER_MASK, version_ihl, dscp_ecn, packet_len, identificator, flags_offset, ttl, proto, checksum, src_ip, dst_ip)
 
 	return packet_without_checksum
 
 
-def get_tcp_header(src_ip,  src_port, dest_ip, dest_port):
+def get_tcp_header(src_ip,  src_port, dst_ip, dst_port, seq_num):
 	src_ip = socket.inet_aton(src_ip)
-	dest_ip = socket.inet_aton(dest_ip)
+	dst_ip = socket.inet_aton(dst_ip)
 
-	sn = 0
-	ack = 0
+	sn = seq_num
 	header_len = 5
 	reservered = 0
+	ack_num = 0
 
 	#flags
 	urg = 0
-	ack = 0
+	ack_flag = 0
 	psh = 0
 	rst = 0
 	syn = 1
 	fin = 0
-	flags = (urg << 5) + (ack << 4) + (psh << 3) + (rst << 2) + (syn << 1) + fin
+	flags = (urg << 5) + (ack_flag << 4) + (psh << 3) + (rst << 2) + (syn << 1) + fin
 
 	header_flags = (header_len << 12) + flags
 	window_size = 64240
 	checksum = 0
 	urgent_pointer = 0
-	tcp_header = pack('!HHIIHHHH', src_port, dest_port, sn, ack, header_flags, window_size, checksum, urgent_pointer)
+	tcp_header = pack('!HHIIHHHH', src_port, dst_port, sn, ack_num, header_flags, window_size, checksum, urgent_pointer)
 
 	protocol = socket.IPPROTO_TCP
-	pseudo_header = pack('!4s4sBBH', src_ip, dest_ip, 0, protocol, len(tcp_header))
+	pseudo_header = pack('!4s4sBBH', src_ip, dst_ip, 0, protocol, len(tcp_header))
 
 
 	header = pseudo_header + tcp_header
 	checksum = get_checksum(header)
 
-	return pack('!HHIIHHHH', src_port, dest_port, sn, ack, header_flags, window_size, checksum, urgent_pointer)
+	return pack('!HHIIHHHH', src_port, dst_port, sn, ack_num, header_flags, window_size, checksum, urgent_pointer)
 
 
 def parse_args():
@@ -92,11 +94,12 @@ def parse_args():
 	return ip, int(port)
 
 
-def get_packet(src_ip, src_port, dest_ip, dest_port):
-	ip_header = get_ip_header(src_ip, dest_ip)
-	tcp_header = get_tcp_header(src_ip, src_port, dest_ip, dest_port)
+def get_packet(src_ip, src_port, dst_ip, dst_port):
+	seq_num = random.randint(1000, 0xFFFFFFFF)
+	ip_header = get_ip_header(src_ip, dst_ip)
+	tcp_header = get_tcp_header(src_ip, src_port, dst_ip, dst_port, seq_num)
 
-	return ip_header + tcp_header
+	return ip_header + tcp_header, seq_num
 
 
 def get_curr_addr():
@@ -116,19 +119,43 @@ def get_curr_addr():
 
 	return IP, PORT
 
+def unpack_packet(packet):
+	eth_len = 0
+	mac_header = packet[:eth_len]
+	ip_header = packet[eth_len: 20 + eth_len]
+	ip_header = unpack('!BBHHHBBH4s4s', ip_header)
+	ip_len = ip_header[2]
+	ip_header_len = (ip_header[0] & 0xF) * 4
+	
+	tcp_header = packet[eth_len + ip_header_len: eth_len + ip_header_len + 20]
+	tcp_header = unpack('!HHIIHHHH', tcp_header)
+	src_ip = socket.inet_ntoa(ip_header[8])
+	dst_ip = socket.inet_ntoa(ip_header[9])
+	src_port = int(tcp_header[0])
+	dst_port = int(tcp_header[1])
+	ack_num = int(tcp_header[3])
+
+	return Packet((src_ip, src_port), (dst_ip, dst_port), ack_num)
+
+
 def main():
 	s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
 	s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-	dest_ip, dest_port = parse_args()
-	dest_ip = socket.gethostbyname(dest_ip)
+	dst_ip, dst_port = parse_args()
+	dst_ip = socket.gethostbyname(dst_ip)
 	src_ip, src_port = get_curr_addr()
-	packet = get_packet(src_ip, src_port, dest_ip, dest_port)
+	packet, seq_num = get_packet(src_ip, src_port, dst_ip, dst_port)
+	ack_num = seq_num + 1
 
-	s.sendto(packet, (dest_ip, dest_port))
+	s.sendto(packet, (dst_ip, dst_port))
 
 	while True:
-		data = s.recvfrom(1024)
-		print(data)
+		data = s.recvfrom(65565)
+		packet = unpack_packet(data[0])
+		if packet.ack_num == ack_num and (src_ip, src_port) == packet.dst_addr and (dst_ip, dst_port) == packet.src_addr:
+			print("Yes")
+			break
+
 
 
 if __name__ == '__main__':
