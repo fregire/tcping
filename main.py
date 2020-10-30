@@ -3,6 +3,7 @@ import socket
 import sys
 from packet import Packet
 import random
+import time
 
 
 def get_checksum(header):
@@ -83,17 +84,6 @@ def get_tcp_header(src_ip,  src_port, dst_ip, dst_port, seq_num):
 	return pack('!HHIIHHHH', src_port, dst_port, sn, ack_num, header_flags, window_size, checksum, urgent_pointer)
 
 
-def parse_args():
-	args = sys.argv
-	ip = args[1]
-	port = None
-
-	if len(args) > 2:
-		port = args[2]
-
-	return ip, int(port)
-
-
 def get_packet(src_ip, src_port, dst_ip, dst_port):
 	seq_num = random.randint(1000, 0xFFFFFFFF)
 	ip_header = get_ip_header(src_ip, dst_ip)
@@ -138,24 +128,47 @@ def unpack_packet(packet):
 	return Packet((src_ip, src_port), (dst_ip, dst_port), ack_num)
 
 
+def parse_args():
+	args = sys.argv
+	ip = args[1]
+	port = None
+
+	if len(args) > 2:
+		port = args[2]
+
+	return ip, int(port)
+
+
 def main():
+	time_to_abort_s = 10
 	s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
 	s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
 	dst_ip, dst_port = parse_args()
-	dst_ip = socket.gethostbyname(dst_ip)
+
+	try:
+		dst_ip = socket.gethostbyname(dst_ip)
+	except socket.gaierror:
+		print('Aborted')
+		return
+
 	src_ip, src_port = get_curr_addr()
 	packet, seq_num = get_packet(src_ip, src_port, dst_ip, dst_port)
 	ack_num = seq_num + 1
 
 	s.sendto(packet, (dst_ip, dst_port))
-
+	start = time.monotonic()
 	while True:
 		data = s.recvfrom(65565)
+		print(data)
 		packet = unpack_packet(data[0])
 		if packet.ack_num == ack_num and (src_ip, src_port) == packet.dst_addr and (dst_ip, dst_port) == packet.src_addr:
-			print("Yes")
+			print("OK")
 			break
 
+		elapsed = time.monotonic() - start
+		if elapsed > time_to_abort_s:
+			print("Aborted")
+			break
 
 
 if __name__ == '__main__':
