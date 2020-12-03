@@ -5,6 +5,7 @@ from packet import Packet
 import random
 import time
 import select
+import argparse
 
 
 def get_checksum(header):
@@ -138,26 +139,27 @@ def unpack_ip(packet):
 
 
 def parse_args():
-    args = sys.argv
-    ip = args[1]
-    port = None
+    parser = argparse.ArgumentParser(description='Аналог команды ping с помощью tcp')
+    parser.add_argument('ip', help='IP адрес', type=str)
+    parser.add_argument('port', help='Порт', type=int)
+    parser.add_argument('-t', '--timeout', default=10, help='Timeout ответа в секундах', type=int)
 
-    if len(args) > 2:
-        port = args[2]
-
-    return ip, int(port)
+    return parser.parse_args()
 
 
 
 def main():
-    time_to_abort_s = 10
+    args = parse_args()
+    time_to_abort_s = args.timeout
+    print(time_to_abort_s)
+    dst_ip = args.ip
+    dst_port = args.port
     s_icmp = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
     s_tcp = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
     s_tcp.setblocking(0)
     s_icmp.setblocking(0)
     s_tcp.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
     s_icmp.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-    dst_ip, dst_port = parse_args()
     try:
         dst_ip = socket.gethostbyname(dst_ip)
     except socket.gaierror:
