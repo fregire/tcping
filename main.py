@@ -4,6 +4,7 @@ import sys
 from packet import Packet
 import random
 import time
+import select
 
 
 def get_checksum(header):
@@ -108,7 +109,7 @@ def get_curr_addr():
 
     return IP, PORT
 
-def unpack_packet(packet):
+def unpack_tcp_packet(packet):
     eth_len = 0
     mac_header = packet[:eth_len]
     ip_header = packet[eth_len: 20 + eth_len]
@@ -128,6 +129,18 @@ def unpack_packet(packet):
     return Packet((src_ip, src_port), (dst_ip, dst_port), ack_num, rst_flag)
 
 
+def is_unreachable(packet):
+    eth_len = 0
+    mac_header = packet[:eth_len]
+    ip_header = packet[eth_len: 20 + eth_len]
+    ip_header = unpack('!BBHHHBBH4s4s', ip_header)
+    ip_len = ip_header[2]
+    ip_header_len = (ip_header[0] & 0xF) * 4
+    icmp_type = packet[eth_len + ip_header_len]
+    print(icmp_type)
+    return icmp_type == 3
+
+
 def parse_args():
     args = sys.argv
     ip = args[1]
@@ -139,10 +152,13 @@ def parse_args():
     return ip, int(port)
 
 
+
 def main():
     time_to_abort_s = 10
-    s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
-    s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+    s_icmp = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+    s_tcp = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+    s_tcp.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+    s_icmp.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
     dst_ip, dst_port = parse_args()
 
     try:
@@ -155,22 +171,34 @@ def main():
     packet, seq_num = get_packet(src_ip, src_port, dst_ip, dst_port)
     ack_num = seq_num + 1
 
-    s.sendto(packet, (dst_ip, dst_port))
     start = time.monotonic()
-    while True:
-        data = s.recvfrom(65565)
-        packet = unpack_packet(data[0])
-        if packet.ack_num == ack_num and (src_ip, src_port) == packet.dst_addr and (dst_ip, dst_port) == packet.src_addr:
-            if packet.rst_flag:
-                print("Not allowed")
-            else:
-                print("OK")
-            break
+    s_tcp.sendto(packet, (dst_ip, dst_port))
+    s_tcp.setblocking(0)
 
-        elapsed = time.monotonic() - start
-        if elapsed > time_to_abort_s:
-            print("Aborted")
-            break
+    while True:
+        readers, _, _ = select.select([s_tcp, s_icmp], [], [])
+
+        for reader in readers:
+            data = reader.recvfrom(65565)
+
+            if reader is s_tcp:
+                packet = unpack_tcp_packet(data[0])
+
+                if packet.ack_num == ack_num and (src_ip, src_port) == packet.dst_addr and (dst_ip, dst_port) == packet.src_addr:
+                    if packet.rst_flag:
+                        print("Not allowed")
+                    else:
+                        print("OK")
+                    return
+
+            if reader is s_icmp:
+                print(data)
+
+            elapsed = time.monotonic() - start
+            if elapsed > time_to_abort_s:
+                print("Aborted")
+                return
+
 
 
 if __name__ == '__main__':
