@@ -153,10 +153,11 @@ def main():
     time_to_abort_s = 10
     s_icmp = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
     s_tcp = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+    s_tcp.setblocking(0)
+    s_icmp.setblocking(0)
     s_tcp.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
     s_icmp.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
     dst_ip, dst_port = parse_args()
-
     try:
         dst_ip = socket.gethostbyname(dst_ip)
     except socket.gaierror:
@@ -169,7 +170,6 @@ def main():
 
     start = time.monotonic()
     s_tcp.sendto(packet, (dst_ip, dst_port))
-    s_tcp.setblocking(0)
 
     while True:
         readers, _, _ = select.select([s_tcp, s_icmp], [], [])
@@ -177,7 +177,6 @@ def main():
         for reader in readers:
             data = reader.recvfrom(65565)
             ip_len, recvd_src_ip, recvd_dst_ip = unpack_ip(data[0])
-            #Get content after ip packet
             data = data[0][ip_len:]
 
             if src_ip == recvd_dst_ip and dst_ip == recvd_src_ip:
@@ -197,7 +196,7 @@ def main():
                         print("Not allowed")
                     else:
                         print("OK")
-                    
+
                     return
 
             elapsed = time.monotonic() - start
