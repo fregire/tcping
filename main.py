@@ -109,36 +109,32 @@ def get_curr_addr():
 
     return IP, PORT
 
-def unpack_tcp_packet(packet):
-    eth_len = 0
-    mac_header = packet[:eth_len]
-    ip_header = packet[eth_len: 20 + eth_len]
-    ip_header = unpack('!BBHHHBBH4s4s', ip_header)
-    ip_len = ip_header[2]
-    ip_header_len = (ip_header[0] & 0xF) * 4
-    
-    tcp_header = packet[eth_len + ip_header_len: eth_len + ip_header_len + 20]
-    tcp_header = unpack('!HHIIHHHH', tcp_header)
-    src_ip = socket.inet_ntoa(ip_header[8])
-    dst_ip = socket.inet_ntoa(ip_header[9])
+def unpack_tcp(packet):
+    tcp_header = unpack('!HHIIHHHH', packet)
     src_port = int(tcp_header[0])
     dst_port = int(tcp_header[1])
     ack_num = int(tcp_header[3])
     rst_flag = (tcp_header[4] & 0x4) >> 2
 
-    return Packet((src_ip, src_port), (dst_ip, dst_port), ack_num, rst_flag)
+    return src_port, dst_port, ack_num, rst_flag
 
 
 def is_unreachable(packet):
+    icmp_type = packet[0]
+
+    return icmp_type == 3
+
+
+def unpack_ip(packet):
     eth_len = 0
     mac_header = packet[:eth_len]
     ip_header = packet[eth_len: 20 + eth_len]
     ip_header = unpack('!BBHHHBBH4s4s', ip_header)
-    ip_len = ip_header[2]
     ip_header_len = (ip_header[0] & 0xF) * 4
-    icmp_type = packet[eth_len + ip_header_len]
-    print(icmp_type)
-    return icmp_type == 3
+    src_ip = socket.inet_ntoa(ip_header[8])
+    dst_ip = socket.inet_ntoa(ip_header[9])
+
+    return ip_header_len, src_ip, dst_ip
 
 
 def parse_args():
@@ -180,19 +176,29 @@ def main():
 
         for reader in readers:
             data = reader.recvfrom(65565)
+            ip_len, recvd_src_ip, recvd_dst_ip = unpack_ip(data[0])
+            #Get content after ip packet
+            data = data[0][ip_len:]
 
-            if reader is s_tcp:
-                packet = unpack_tcp_packet(data[0])
+            if src_ip == recvd_dst_ip and dst_ip == recvd_src_ip:
+                if reader is s_tcp:
+                    data = data[0: 20]
+                    r_src_port, r_dst_port, r_ack, rst_flag = unpack_tcp(data)
 
-                if packet.ack_num == ack_num and (src_ip, src_port) == packet.dst_addr and (dst_ip, dst_port) == packet.src_addr:
-                    if packet.rst_flag:
+                    if r_ack == ack_num and src_port == r_dst_port and dst_port == r_src_port:
+                        if rst_flag:
+                            print("Not allowed")
+                        else:
+                            print("OK")
+                        return
+
+                if reader is s_icmp:
+                    if is_unreachable(data):
                         print("Not allowed")
                     else:
                         print("OK")
+                    
                     return
-
-            if reader is s_icmp:
-                print(data)
 
             elapsed = time.monotonic() - start
             if elapsed > time_to_abort_s:
