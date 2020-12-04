@@ -168,9 +168,21 @@ def tcping(ip, port, time_to_abort_s):
     s_tcp.sendto(packet, (dst_ip, dst_port))
 
     while True:
+        ## Start checking time
+        elapsed = time.monotonic() - start
+        if elapsed > time_to_abort_s:
+            return ABORTED
+        ## End checking time
+
         readers, _, _ = select.select([s_tcp, s_icmp], [], [])
 
         for reader in readers:
+            ## Start checking time
+            elapsed = time.monotonic() - start
+            if elapsed > time_to_abort_s:
+                return ABORTED
+            ## End checking timeout
+
             data = reader.recvfrom(65565)
             ip_data = unpack_ip(data[0])
             data = data[0][ip_data.len:]
@@ -193,7 +205,8 @@ def tcping(ip, port, time_to_abort_s):
                         return OK
 
                     return
-
+            ## Start checking time
             elapsed = time.monotonic() - start
             if elapsed > time_to_abort_s:
                 return ABORTED
+            ## End checking time
