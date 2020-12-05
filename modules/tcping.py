@@ -9,13 +9,14 @@ from collections import namedtuple
 import threading
 
 
+TCP_data = namedtuple('TCP_data', ['src_port', 'dst_port', 'ack', 'rst'])
+IP_data = namedtuple('IP_data', ['len', 'src_ip', 'dst_ip'])
+Result = namedtuple('Result', ['state', 'response_time'])
+
 NOT_ALLOWED = "Not allowed"
 OK = "OK"
 ABORTED = "Aborted"
 
-TCP_data = namedtuple('TCP_data', ['src_port', 'dst_port', 'ack', 'rst'])
-IP_data = namedtuple('IP_data', ['len', 'src_ip', 'dst_ip'])
-Result = namedtuple('Result', ['state', 'response_time'])
 
 def get_checksum(header):
     s = 0
@@ -95,8 +96,8 @@ def get_tcp_header(src_ip,  src_port, dst_ip, dst_port, seq_num):
     return pack('!HHIIHHHH', src_port, dst_port, sn, ack_num, header_flags, window_size, checksum, urgent_pointer)
 
 
-def get_packet(src_ip, src_port, dst_ip, dst_port):
-    seq_num = random.randint(1000, 0xFFFFFFFF)
+def get_tcp_packet(src_ip, src_port, dst_ip, dst_port):
+    seq_num = random.randint(1000, 0xFFFFFFFF - 1)
     ip_header = get_ip_header(src_ip, dst_ip)
     tcp_header = get_tcp_header(src_ip, src_port, dst_ip, dst_port, seq_num)
 
@@ -144,16 +145,28 @@ def unpack_ip(packet):
 
     return IP_data(ip_header_len, src_ip, dst_ip)
 
+def get_socket(sock_proto):
+    s = socket.socket(socket.AF_INET, socket.SOCK_RAW, sock_proto)
+    s.setblocking(0)
+    s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+
+    return s
+
+
+def is_tcp_packets_matches(request, response):
+    return (request.ack == response.ack and
+            request.src_port == response.dst_port and 
+            request.dst_port == response.src_port)
+
+def is_ip_packets_matches(request, response):
+    return request.src_ip == response.dst_ip and request.dst_ip == response.src_ip
+
 
 def get_response(ip, port, result):
     dst_ip = ip
     dst_port = port
-    s_icmp = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-    s_tcp = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
-    s_tcp.setblocking(0)
-    s_icmp.setblocking(0)
-    s_tcp.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-    s_icmp.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+    s_icmp = get_socket(socket.IPPROTO_ICMP)
+    s_tcp = get_socket(socket.IPPROTO_TCP)
 
     try:
         dst_ip = socket.gethostbyname(dst_ip)
@@ -162,8 +175,10 @@ def get_response(ip, port, result):
         return
 
     src_ip, src_port = get_curr_addr(dst_ip, dst_port)
-    packet, seq_num = get_packet(src_ip, src_port, dst_ip, dst_port)
+    packet, seq_num = get_tcp_packet(src_ip, src_port, dst_ip, dst_port)
     ack_num = seq_num + 1
+    src_tcp = TCP_data(src_port, dst_port, ack_num, 0)
+    src_ip = IP_data(0, src_ip, dst_ip)
 
     start = time.monotonic()
     s_tcp.sendto(packet, (dst_ip, dst_port))
@@ -176,11 +191,11 @@ def get_response(ip, port, result):
             ip_data = unpack_ip(data[0])
             data = data[0][ip_data.len:]
 
-            if src_ip == ip_data.dst_ip and dst_ip == ip_data.src_ip:
+            if is_ip_packets_matches(src_ip, ip_data):
                 if reader is s_tcp:
                     recvd_tcp = unpack_tcp(data[0: 20])
 
-                    if recvd_tcp.ack == ack_num and recvd_tcp.dst_port == src_port and recvd_tcp.src_port == dst_port:
+                    if is_tcp_packets_matches(src_tcp, recvd_tcp):
                         if recvd_tcp.rst:
                             result.append(Result(NOT_ALLOWED, time.monotonic() - start))
                         else:
@@ -205,7 +220,7 @@ def tcping(ip, port, packets_amount, send_interval, response_time):
             time.sleep(send_interval)
         else:
             inited = True
-        
+
         th = threading.Thread(target=get_response, args=(ip, port, result))
         th.daemon = True
         th.start()
