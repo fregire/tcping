@@ -8,7 +8,7 @@ def parse_args():
     parser.add_argument('port', help='Порт', type=int)
     parser.add_argument('-a', '--amount', default=1, help='Число отправляемых пакетов', type=int)
     parser.add_argument('-t', '--timeout', default=10, help='Время ожидания ответа', type=int)
-    parser.add_argument('-i', '--interval', default=10, help='Интервал отправки пакетов', type=int)
+    parser.add_argument('-i', '--interval', default=0, help='Интервал отправки пакетов', type=int)
 
 
     return parser.parse_args()
@@ -16,7 +16,7 @@ def parse_args():
 
 def main():
 	args = parse_args()
-	tcping.tcping(args.ip, args.port, args.timeout)
+	tcping.tcping(args.ip, args.port, args.amount, args.interval, args.timeout)
 
 
 

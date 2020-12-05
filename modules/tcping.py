@@ -15,7 +15,7 @@ ABORTED = "Aborted"
 
 TCP_data = namedtuple('TCP_data', ['src_port', 'dst_port', 'ack', 'rst'])
 IP_data = namedtuple('IP_data', ['len', 'src_ip', 'dst_ip'])
-
+Result = namedtuple('Result', ['state', 'response_time'])
 
 def get_checksum(header):
     s = 0
@@ -182,27 +182,40 @@ def get_response(ip, port, result):
 
                     if recvd_tcp.ack == ack_num and recvd_tcp.dst_port == src_port and recvd_tcp.src_port == dst_port:
                         if recvd_tcp.rst:
-                            result.append(NOT_ALLOWED)
+                            result.append(Result(NOT_ALLOWED, time.monotonic() - start))
                         else:
-                            result.append(OK)
+                            result.append(Result(OK, time.monotonic() - start))
+
                         return
 
                 if reader is s_icmp:
                     if is_unreachable(data):
-                        result.append(NOT_ALLOWED)
+                        result.append(Result(NOT_ALLOWED, time.monotonic() - start))
                     else:
-                        result.append(OK)
+                        result.append(Result(OK, time.monotonic() - start))
 
                     return
 
-def tcping(ip, port, packets_amount, response_time, send_interval):
+def tcping(ip, port, packets_amount, send_interval, response_time):
     result = []
-    th = threading.Thread(target=get_response, args=(ip, port, result))
-    th.daemon = True
-    th.start()
-    th.join(timeout=response_time)
+    inited = False
 
-    if result:
-        print(result[0])
-    else:
-        print(ABORTED)
+    for _ in range(packets_amount):
+        if inited:
+            time.sleep(send_interval)
+        else:
+            inited = True
+        
+        th = threading.Thread(target=get_response, args=(ip, port, result))
+        th.daemon = True
+        th.start()
+        th.join(timeout=response_time)
+
+        if result:
+            state = result[0].state
+            resp_time = result[0].response_time
+            print(state, resp_time)
+        else:
+            print(ABORTED)
+
+        result.clear()
