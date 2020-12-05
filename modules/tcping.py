@@ -6,6 +6,7 @@ import time
 import select
 import argparse
 from collections import namedtuple
+import threading
 
 
 NOT_ALLOWED = "Not allowed"
@@ -144,8 +145,7 @@ def unpack_ip(packet):
     return IP_data(ip_header_len, src_ip, dst_ip)
 
 
-
-def tcping(ip, port, time_to_abort_s):
+def get_response(ip, port, result):
     dst_ip = ip
     dst_port = port
     s_icmp = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
@@ -158,7 +158,8 @@ def tcping(ip, port, time_to_abort_s):
     try:
         dst_ip = socket.gethostbyname(dst_ip)
     except socket.gaierror:
-        return ABORTED
+        result.append(ABORTED)
+        return
 
     src_ip, src_port = get_curr_addr(dst_ip, dst_port)
     packet, seq_num = get_packet(src_ip, src_port, dst_ip, dst_port)
@@ -168,21 +169,9 @@ def tcping(ip, port, time_to_abort_s):
     s_tcp.sendto(packet, (dst_ip, dst_port))
 
     while True:
-        ## Start checking time
-        elapsed = time.monotonic() - start
-        if elapsed > time_to_abort_s:
-            return ABORTED
-        ## End checking time
-
         readers, _, _ = select.select([s_tcp, s_icmp], [], [])
 
         for reader in readers:
-            ## Start checking time
-            elapsed = time.monotonic() - start
-            if elapsed > time_to_abort_s:
-                return ABORTED
-            ## End checking timeout
-
             data = reader.recvfrom(65565)
             ip_data = unpack_ip(data[0])
             data = data[0][ip_data.len:]
@@ -193,20 +182,27 @@ def tcping(ip, port, time_to_abort_s):
 
                     if recvd_tcp.ack == ack_num and recvd_tcp.dst_port == src_port and recvd_tcp.src_port == dst_port:
                         if recvd_tcp.rst:
-                            return NOT_ALLOWED
+                            result.append(NOT_ALLOWED)
                         else:
-                            return OK
+                            result.append(OK)
                         return
 
                 if reader is s_icmp:
                     if is_unreachable(data):
-                        return NOT_ALLOWED
+                        result.append(NOT_ALLOWED)
                     else:
-                        return OK
+                        result.append(OK)
 
                     return
-            ## Start checking time
-            elapsed = time.monotonic() - start
-            if elapsed > time_to_abort_s:
-                return ABORTED
-            ## End checking time
+
+def tcping(ip, port, packets_amount, response_time, send_interval):
+    result = []
+    th = threading.Thread(target=get_response, args=(ip, port, result))
+    th.daemon = True
+    th.start()
+    th.join(timeout=response_time)
+
+    if result:
+        print(result[0])
+    else:
+        print(ABORTED)
