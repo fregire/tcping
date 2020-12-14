@@ -105,6 +105,7 @@ class TCPing():
 						else:
 							return Result(State.OK, time.monotonic() - start_time)
 
+
 	def get_response(self, ip, port, result, response_time):
 		dst_ip = ip
 		dst_port = port

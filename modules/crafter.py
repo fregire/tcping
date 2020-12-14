@@ -24,7 +24,7 @@ class Crafter():
 
 
     @staticmethod
-    def get_ip_header(src_ip, dst_ip):
+    def get_ip_header(src_ip, dst_ip, proto=socket.IPPROTO_TCP):
         IP_HEADER_MASK = '!BBHHHBBH4s4s'
         version = 4
         ihl = 5
@@ -42,7 +42,6 @@ class Crafter():
         fragment_offset = 0
         flags_offset = (flags << 13) + fragment_offset
         ttl = 255
-        proto = socket.IPPROTO_TCP
         checksum = 0
         src_ip = socket.inet_aton(src_ip)
         dst_ip = socket.inet_aton(dst_ip)
@@ -53,7 +52,7 @@ class Crafter():
 
 
     @staticmethod
-    def get_tcp_header(src_ip,  src_port, dst_ip, dst_port, seq_num):
+    def get_tcp_header(src_ip,  src_port, dst_ip, dst_port, seq_num, window_size=64240):
         src_ip = socket.inet_aton(src_ip)
         dst_ip = socket.inet_aton(dst_ip)
 
@@ -72,7 +71,6 @@ class Crafter():
         flags = (urg << 5) + (ack_flag << 4) + (psh << 3) + (rst << 2) + (syn << 1) + fin
 
         header_flags = (header_len << 12) + flags
-        window_size = 64240
         checksum = 0
         urgent_pointer = 0
         tcp_header = pack('!HHIIHHHH', src_port, dst_port, sn, ack_num, header_flags, window_size, checksum, urgent_pointer)
