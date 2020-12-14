@@ -1,6 +1,6 @@
 from modules import tcping
 import argparse
-
+import socket
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Аналог команды ping с помощью tcp')
@@ -15,10 +15,10 @@ def parse_args():
 
 
 def main():
-	args = parse_args()
-	tcping.tcping(args.ip, args.port, args.amount, args.interval, args.timeout)
+    args = parse_args()
+    tcping.TCPing().ping(args.ip, args.port, args.amount, args.interval, args.timeout)
 
 
 
 if __name__ == '__main__':
-	main()
+    main()
