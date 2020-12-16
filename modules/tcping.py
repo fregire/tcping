@@ -13,14 +13,20 @@ from .statistics import Stat
 from .structures import *
 
 
+STATES_NAMES = {
+	State.ABORTED: 'Aborted',
+	State.OK: 'Ok',
+	State.NOT_ALLOWED: 'Not allowed'
+}
+
 
 class TCPing():
 	@staticmethod
-	def show_result(result):
+	def get_formatted_result(result):
 		if result.state == State.ABORTED:
-			print(result.state)
-		else:
-			print(result.state, result.response_time)
+			return STATES_NAMES[result.state]
+
+		return f'{STATES_NAMES[result.state]} {result.response_time}'
 
 
 	@staticmethod
@@ -40,12 +46,10 @@ class TCPing():
 
 
 	@staticmethod
-	def is_unreachable(icmp_packet):
-		icmp_type = icmp_packet[0]
-
+	def is_unreachable(icmp_type):
 		return icmp_type == 3
 
-	
+
 	@staticmethod
 	def get_socket(sock_proto):
 		s = socket.socket(socket.AF_INET, socket.SOCK_RAW, sock_proto)
@@ -68,16 +72,31 @@ class TCPing():
 			request.dst_ip == response.src_ip)
 
 
+	def handle_tcp(self, recvd_tcp, src_tcp, start_time):
+		if self.is_tcp_packets_matches(src_tcp, recvd_tcp):
+			if recvd_tcp.rst:
+				return Result(State.NOT_ALLOWED, time.monotonic() - start_time)
+			else:
+				return Result(State.OK, time.monotonic() - start_time)
+
+
+	def handle_icmp(self, packet, start_time):
+		icmp_type = packet[0]
+
+		if self.is_unreachable(icmp_type):
+			return Result(State.NOT_ALLOWED, time.monotonic() - start_time)
+		else:
+			return Result(State.OK, time.monotonic() - start_time)
+
+
 	def get_result(
 		self,
 		s_tcp, 
 		s_icmp, 
 		src_ip, 
 		src_tcp, 
-		result, 
 		response_time, 
 		start_time=time.monotonic()):
-
 		while True:
 			readers, _, _ = select.select([s_tcp, s_icmp], [], [])
 
@@ -87,23 +106,19 @@ class TCPing():
 			for reader in readers:
 				data = reader.recvfrom(65565)
 				ip_data = Crafter.unpack_ip(data[0])
-				data = data[0][ip_data.len:]
+				ip_load = data[0][ip_data.len:]
+				res = None
 
 				if self.is_ip_packets_matches(src_ip, ip_data):
 					if reader is s_tcp:
-						recvd_tcp = Crafter.unpack_tcp(data[0: 20])
-
-						if self.is_tcp_packets_matches(src_tcp, recvd_tcp):
-							if recvd_tcp.rst:
-								return Result(State.NOT_ALLOWED, time.monotonic() - start_time)
-							else:
-								return Result(State.OK, time.monotonic() - start_time)
+						recvd_tcp = Crafter.unpack_tcp(ip_load[0: 20])
+						res = self.handle_tcp(recvd_tcp, src_tcp, start_time)
 
 					if reader is s_icmp:
-						if self.is_unreachable(data):
-							return Result(State.NOT_ALLOWED, time.monotonic() - start_time)
-						else:
-							return Result(State.OK, time.monotonic() - start_time)
+						res = self.handle_icmp(ip_load, start_time)
+
+					if res:
+						return res
 
 
 	def get_response(self, ip, port, result, response_time):
@@ -128,15 +143,16 @@ class TCPing():
 
 		with s_tcp:
 			with s_icmp:
-				if time.monotonic() - start_time <= response_time:
-					result.append(self.get_result(
+				res = self.get_result(
 						s_tcp, 
 						s_icmp, 
 						src_ip, 
 						src_tcp, 
-						result, 
 						response_time,
-						start_time))
+						start_time)
+
+				if time.monotonic() - start_time <= response_time:
+					result.append(res)
 
 				
 	def ping(self, ip, port, packets_amount, send_interval, response_time):
@@ -163,7 +179,7 @@ class TCPing():
 				repsonse_res = result[0]
 
 			stat.update(repsonse_res)
-			self.show_result(repsonse_res)
+			print(self.get_formatted_result(repsonse_res))
 
 			result.clear()
 		

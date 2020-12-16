@@ -73,16 +73,6 @@ class TestCrafter(unittest.TestCase):
 		self.assertEqual(result.src_ip, SRC_IP)
 		self.assertEqual(result.dst_ip, DST_IP)
 
-	'''
-	def test_tcp_packet(self):
-		result, seq = self.crafter.get_tcp_packet(SRC_IP, SRC_PORT, DST_IP, DST_PORT)
-		packet = self.get_ip_packet()/TCP(
-			seq=seq, dport=DST_PORT, sport=SRC_PORT, window=WINDOW_SIZE, dataofs=5)
-
-		TCP(IP(result).load).show2()
-		print(packet[TCP].show2())
-		self.assertEqual(raw(packet), result)
-	'''
 
 if __name__ == '__main__':
 	unittest.main()

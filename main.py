@@ -10,7 +10,6 @@ def parse_args():
     parser.add_argument('-t', '--timeout', default=10, help='Время ожидания ответа', type=float)
     parser.add_argument('-i', '--interval', default=0, help='Интервал отправки пакетов', type=float)
 
-
     return parser.parse_args()
 
 
