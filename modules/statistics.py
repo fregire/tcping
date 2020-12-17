@@ -29,7 +29,7 @@ class Min_time_stat():
         if result.state is State.ABORTED:
             return
 
-        if not self.min_time or self.min_time < result.response_time:
+        if not self.min_time or result.response_time < self.min_time :
             self.min_time = result.response_time
 
 
@@ -49,7 +49,7 @@ class Max_time_stat():
         if result.state is State.ABORTED:
             return
 
-        if not self.max_time or self.max_time > result.response_time:
+        if not self.max_time or result.response_time > self.max_time:
             self.max_time = result.response_time
 
     def get_formatted_res(self):

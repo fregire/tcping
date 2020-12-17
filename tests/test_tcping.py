@@ -4,9 +4,17 @@ from scapy.all import *
 import socket
 from modules import tcping
 from modules.structures import *
+from scapy.all import *
 
 
+AVAILABLE_TYPE = 0
 UNREACHABLE_TYPE = 3
+SRC_PORT = 123
+DST_PORT = 321
+SEQ = 456
+ACK = SEQ + 1
+RST = 0
+REQUEST = TCP_data(SRC_PORT, DST_PORT, ACK, RST)
 
 
 class TestTCPing(unittest.TestCase):
@@ -41,29 +49,49 @@ class TestTCPing(unittest.TestCase):
 			False)
 
 
+	def tcp_matches(self, response, expected_res):
+		self.assertEqual(
+			self.tcping.is_tcp_packets_matches(REQUEST, response),
+			expected_res)
+
+
 	def test_tcp_matching(self):
-		src_port, dst_port, seq = 123, 321, 456
-		ack = seq + 1
-		rst = 0
+		self.tcp_matches(TCP_data(DST_PORT, SRC_PORT, ACK, RST), True)
+		self.tcp_matches(TCP_data(DST_PORT, SRC_PORT - 2, ACK, RST), False)
+		self.tcp_matches(TCP_data(DST_PORT, SRC_PORT, ACK + 2, RST), False)
+		self.tcp_matches(TCP_data(DST_PORT - 2, SRC_PORT, ACK, RST), False)
 
-		request = TCP_data(src_port, dst_port, ack, rst)
-		response = TCP_data(dst_port, src_port, ack, rst)
+
+	def handle_tcp(self, response, expected_res):
+		res = self.tcping.handle_tcp(response, REQUEST, 0)
+		res_state = None
+		if res:
+			res_state = res.state
 
 		self.assertEqual(
-			self.tcping.is_tcp_packets_matches(request, response),
-			True)
+			res_state,
+			expected_res)
 
-		response = TCP_data(dst_port, src_port - 2, ack, rst)
-		self.assertEqual(
-			self.tcping.is_tcp_packets_matches(request, response),
-			False)
 
-		response = TCP_data(dst_port, src_port, ack + 2, rst)
-		self.assertEqual(
-			self.tcping.is_tcp_packets_matches(request, response),
-			False)
+	def test_handle_tcp(self):
+		self.handle_tcp(
+			TCP_data(DST_PORT, SRC_PORT, ACK, RST),
+			State.OK)
+		self.handle_tcp(
+			TCP_data(DST_PORT, SRC_PORT, ACK, 1),
+			State.NOT_ALLOWED)
+		self.handle_tcp(
+			TCP_data(DST_PORT, SRC_PORT, 90, 0),
+			None)
 
-		response = TCP_data(dst_port - 2, src_port, ack, rst)
-		self.assertEqual(
-			self.tcping.is_tcp_packets_matches(request, response),
-			False)
+
+	def test_handle_icmp(self):
+		start_time = 0
+		unreachable_packet = raw(ICMP(type=UNREACHABLE_TYPE))
+		available_packet = raw(ICMP(type=AVAILABLE_TYPE))
+
+		res = self.tcping.handle_icmp(unreachable_packet, start_time)
+		self.assertEqual(res.state, State.NOT_ALLOWED)
+
+		res = self.tcping.handle_icmp(available_packet, start_time)
+		self.assertEqual(res.state, State.OK)
