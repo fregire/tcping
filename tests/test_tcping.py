@@ -7,6 +7,7 @@ from modules.structures import *
 from scapy.all import *
 
 
+IP = '51.75.74.114'
 AVAILABLE_TYPE = 0
 UNREACHABLE_TYPE = 3
 SRC_PORT = 123

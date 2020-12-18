@@ -96,9 +96,9 @@ class TCPing():
                 return Result(State.ABORTED, time.monotonic() - start_time)
 
             for reader in readers:
-                data = reader.recvfrom(65565)
-                ip_data = Crafter.unpack_ip(data[0])
-                ip_load = data[0][ip_data.len:]
+                data, addr = reader.recvfrom(65565)
+                ip_data = Crafter.unpack_ip(data)
+                ip_load = data[ip_data.len:]
                 res = None
 
                 if self.is_ip_packets_matches(src_ip, ip_data):

@@ -66,8 +66,9 @@ class Average_stat():
         if result.state is State.ABORTED:
             return
 
-        self.average_time =
-        self.average_time * self.res_count + result.response_time
+        self.average_time = (
+            self.average_time * self.res_count
+            + result.response_time)
 
     def get_formatted_res(self):
         return str(self.average_time)

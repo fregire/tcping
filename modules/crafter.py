@@ -76,7 +76,7 @@ class Crafter():
         reservered = 0
         ack_num = 0
 
-        #flags
+        # flags
         urg = 0
         ack_flag = 0
         psh = 0
@@ -84,12 +84,13 @@ class Crafter():
         syn = 1
         fin = 0
 
-        flags = (urg << 5) +
-        (ack_flag << 4) +
-        (psh << 3) +
-        (rst << 2) +
-        (syn << 1) +
-        fin
+        flags = (
+            (urg << 5) +
+            (ack_flag << 4) +
+            (psh << 3) +
+            (rst << 2) +
+            (syn << 1) +
+            fin)
 
         header_flags = (header_len << 12) + flags
         checksum = 0
