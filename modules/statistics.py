@@ -32,10 +32,8 @@ class Min_time_stat():
         if not self.min_time or result.response_time < self.min_time :
             self.min_time = result.response_time
 
-
     def get_formatted_res(self):
         return str(self.min_time)
-
 
     def __str__(self):
         return "Min response time"
@@ -64,17 +62,15 @@ class Average_stat():
         self.average_time = 0
         self.res_count = 0
 
-
     def update(self, result):
         if result.state is State.ABORTED:
             return
 
-        self.average_time = self.average_time * self.res_count + result.response_time
-
+        self.average_time =
+        self.average_time * self.res_count + result.response_time
 
     def get_formatted_res(self):
         return str(self.average_time)
-
 
     def __str__(self):
         return "Average response time"
@@ -87,8 +83,11 @@ class Stat():
         self.min_resp_time = 0
         self.average_resp_time = 0
         self.max_res_time = 0
-        self.stats = [Loss_percent_stat(), Min_time_stat(), Max_time_stat(), Average_stat()]
-
+        self.stats = [
+            Loss_percent_stat(),
+            Min_time_stat(),
+            Max_time_stat(),
+            Average_stat()]
 
     def update(self, result):
         self.results.append(result)
@@ -103,4 +102,3 @@ class Stat():
             res += f'{stat}: {stat.get_formatted_res()} \n'
 
         return res
-        

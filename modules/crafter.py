@@ -19,9 +19,8 @@ class Crafter():
             result += s & 0xFFFF
             s = s >> 16
         result ^= 0xFFFF
-        
-        return result
 
+        return result
 
     @staticmethod
     def get_ip_header(src_ip, dst_ip, proto=socket.IPPROTO_TCP):
@@ -46,13 +45,29 @@ class Crafter():
         src_ip = socket.inet_aton(src_ip)
         dst_ip = socket.inet_aton(dst_ip)
 
-        packet_without_checksum = pack(IP_HEADER_MASK, version_ihl, dscp_ecn, packet_len, identificator, flags_offset, ttl, proto, checksum, src_ip, dst_ip)
+        packet_without_checksum = pack(
+            IP_HEADER_MASK,
+            version_ihl,
+            dscp_ecn,
+            packet_len,
+            identificator,
+            flags_offset,
+            ttl,
+            proto,
+            checksum,
+            src_ip,
+            dst_ip)
 
         return packet_without_checksum
 
-
     @staticmethod
-    def get_tcp_header(src_ip,  src_port, dst_ip, dst_port, seq_num, window_size=64240):
+    def get_tcp_header(
+        src_ip,
+        src_port,
+        dst_ip,
+        dst_port,
+        seq_num,
+        window_size=64240):
         src_ip = socket.inet_aton(src_ip)
         dst_ip = socket.inet_aton(dst_ip)
 
@@ -68,31 +83,63 @@ class Crafter():
         rst = 0
         syn = 1
         fin = 0
-        flags = (urg << 5) + (ack_flag << 4) + (psh << 3) + (rst << 2) + (syn << 1) + fin
+
+        flags = (urg << 5) +
+        (ack_flag << 4) +
+        (psh << 3) +
+        (rst << 2) +
+        (syn << 1) +
+        fin
 
         header_flags = (header_len << 12) + flags
         checksum = 0
         urgent_pointer = 0
-        tcp_header = pack('!HHIIHHHH', src_port, dst_port, sn, ack_num, header_flags, window_size, checksum, urgent_pointer)
+        tcp_header = pack(
+            '!HHIIHHHH',
+            src_port,
+            dst_port,
+            sn,
+            ack_num,
+            header_flags,
+            window_size,
+            checksum,
+            urgent_pointer)
 
         protocol = socket.IPPROTO_TCP
-        pseudo_header = pack('!4s4sBBH', src_ip, dst_ip, 0, protocol, len(tcp_header))
-
+        pseudo_header = pack(
+            '!4s4sBBH',
+            src_ip,
+            dst_ip,
+            0,
+            protocol,
+            len(tcp_header))
 
         header = pseudo_header + tcp_header
         checksum = Crafter.get_checksum(header)
 
-        return pack('!HHIIHHHH', src_port, dst_port, sn, ack_num, header_flags, window_size, checksum, urgent_pointer)
-
+        return pack(
+            '!HHIIHHHH',
+            src_port,
+            dst_port,
+            sn,
+            ack_num,
+            header_flags,
+            window_size,
+            checksum,
+            urgent_pointer)
 
     @staticmethod
     def get_tcp_packet(src_ip, src_port, dst_ip, dst_port):
         seq_num = random.randint(1000, 0xFFFFFFFF - 1)
         ip_header = Crafter.get_ip_header(src_ip, dst_ip)
-        tcp_header = Crafter.get_tcp_header(src_ip, src_port, dst_ip, dst_port, seq_num)
+        tcp_header = Crafter.get_tcp_header(
+            src_ip,
+            src_port,
+            dst_ip,
+            dst_port,
+            seq_num)
 
         return ip_header + tcp_header, seq_num
-
 
     @staticmethod
     def unpack_tcp(tcp_packet):
@@ -103,7 +150,6 @@ class Crafter():
         rst_flag = (tcp_header[4] & 0x4) >> 2
 
         return TCP_data(src_port, dst_port, ack_num, rst_flag)
-
 
     @staticmethod
     def unpack_ip(packet):
