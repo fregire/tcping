@@ -1,4 +1,4 @@
-#Утилита "tcping"
+# Утилита "tcping"
 Версия 1.0
 Автор: Гильмутдинов Даниил (fregire@yandex.ru)
 
@@ -10,14 +10,16 @@
 * Модуль scapy версии 2.4.4
 
 ## Состав
-* Модули modules/
-* Тесты tests/
-* Файл для запуска утилиты start.py
+* Модули `modules/`
+* Тесты `tests/`
+* Файл для запуска утилиты `start.py`
 
 ## Управление
 `python3 start.py [-h] [-a AMOUNT] [-t TIMEOUT] [-i INTERVAL] ip port`
+
 Подробнее о параметрах можно узнать с помощью:
 `python3 start.py -h`
+
 Пример запуска:
 `python3 start.py alexbers.com 80`
 

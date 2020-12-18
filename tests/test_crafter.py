@@ -1,6 +1,6 @@
 from modules import crafter
 import unittest
-from scapy.all import *
+from scapy.all import IP,TCP,ICMP,raw
 import socket
 
 SRC_IP = '192.168.0.106'
