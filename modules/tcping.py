@@ -8,7 +8,7 @@ import argparse
 from collections import namedtuple
 import threading
 import statistics
-from .crafter import Crafter
+from .crafter import *
 from .statistics import Stat
 from .structures import *
 
@@ -97,13 +97,13 @@ class TCPing():
 
             for reader in readers:
                 data, addr = reader.recvfrom(65565)
-                ip_data = Crafter.unpack_ip(data)
+                ip_data = unpack_ip(data)
                 ip_load = data[ip_data.len:]
                 res = None
 
                 if self.is_ip_packets_matches(src_ip, ip_data):
                     if reader is s_tcp:
-                        recvd_tcp = Crafter.unpack_tcp(ip_load[0: 20])
+                        recvd_tcp = unpack_tcp(ip_load[0: 20])
                         res = self.handle_tcp(recvd_tcp, src_tcp, start_time)
 
                     if reader is s_icmp:
@@ -125,7 +125,7 @@ class TCPing():
             return
 
         src_ip, src_port = self.get_curr_addr(dst_ip, dst_port)
-        packet, seq_num = Crafter.get_tcp_packet(
+        packet, seq_num = get_tcp_packet(
             src_ip,
             src_port,
             dst_ip,
@@ -153,7 +153,7 @@ class TCPing():
         result = []
         inited = False
         stat = Stat()
-
+        # мин времея отправки и интервала отправки через селект с временем
         for _ in range(packets_amount):
             if inited:
                 time.sleep(send_interval)

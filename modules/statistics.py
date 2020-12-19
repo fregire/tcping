@@ -16,7 +16,7 @@ class Loss_percent_stat():
 
     def get_formatted_res(self):
         return f'{int(self.get_result())} % loss'
-
+    # str в get_formatted_res
     def __str__(self):
         return "Loss percent"
 
@@ -76,14 +76,11 @@ class Average_stat():
     def __str__(self):
         return "Average response time"
 
-
+# именование классов статистик
+# class name без скобок
 class Stat():
     def __init__(self):
         self.results = []
-        self.loss_amount = 0
-        self.min_resp_time = 0
-        self.average_resp_time = 0
-        self.max_res_time = 0
         self.stats = [
             Loss_percent_stat(),
             Min_time_stat(),
