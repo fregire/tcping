@@ -10,7 +10,7 @@ import threading
 import statistics
 from .crafter import *
 from .statistics import Stat
-from .structures import *
+from .structures import TCP_data, IP_data, Result, State
 from .network import Network
 
 

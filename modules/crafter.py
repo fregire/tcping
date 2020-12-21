@@ -2,7 +2,7 @@ from struct import unpack, pack
 import socket
 from collections import namedtuple
 import random
-from .structures import *
+from .structures import TCP_data, IP_data
 
 
 def get_checksum(header):

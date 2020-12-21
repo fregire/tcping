@@ -1,4 +1,4 @@
-from .structures import *
+from .structures import State, Result
 
 
 class LossPercentStat:
