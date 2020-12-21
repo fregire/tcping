@@ -11,6 +11,7 @@ import statistics
 from .crafter import *
 from .statistics import Stat
 from .structures import *
+from .network import Network
 
 
 STATES_NAMES = {
@@ -20,7 +21,10 @@ STATES_NAMES = {
 }
 
 
-class TCPing():
+class TCPing:
+    def __init__(self):
+        self.network = Network()
+
     @staticmethod
     def get_formatted_result(result):
         if result.state == State.ABORTED:
@@ -89,28 +93,29 @@ class TCPing():
         src_tcp,
         response_time,
         start_time=time.monotonic()):
-        while True:
-            readers, _, _ = select.select([s_tcp, s_icmp], [], [])
 
+        while True:
             if time.monotonic() - start_time > response_time:
                 return Result(State.ABORTED, time.monotonic() - start_time)
+            res = self.network.recv()
+            if res:
+                data, addr, is_icmp = res
+            else:
+                continue
+            ip_data = unpack_ip(data)
+            ip_load = data[ip_data.len:]
+            res = None
 
-            for reader in readers:
-                data, addr = reader.recvfrom(65565)
-                ip_data = unpack_ip(data)
-                ip_load = data[ip_data.len:]
-                res = None
+            if self.is_ip_packets_matches(src_ip, ip_data):
+                if not is_icmp:
+                    recvd_tcp = unpack_tcp(ip_load[0: 20])
+                    res = self.handle_tcp(recvd_tcp, src_tcp, start_time)
 
-                if self.is_ip_packets_matches(src_ip, ip_data):
-                    if reader is s_tcp:
-                        recvd_tcp = unpack_tcp(ip_load[0: 20])
-                        res = self.handle_tcp(recvd_tcp, src_tcp, start_time)
+                if is_icmp:
+                    res = self.handle_icmp(ip_load, start_time)
 
-                    if reader is s_icmp:
-                        res = self.handle_icmp(ip_load, start_time)
-
-                    if res:
-                        return res
+                if res:
+                    return res
 
     def get_response(self, ip, port, result, response_time):
         dst_ip = ip
