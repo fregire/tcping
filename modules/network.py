@@ -28,3 +28,6 @@ class Network:
                         is_icmp = True
 
                     return data, addr, is_icmp
+
+    def send(self, data, addr):
+        self.s_tcp.sendto(data, addr)

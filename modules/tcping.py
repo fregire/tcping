@@ -87,8 +87,6 @@ class TCPing:
 
     def get_result(
         self,
-        s_tcp,
-        s_icmp,
         src_ip,
         src_tcp,
         response_time,
@@ -120,8 +118,6 @@ class TCPing:
     def get_response(self, ip, port, result, response_time):
         dst_ip = ip
         dst_port = port
-        s_icmp = self.get_socket(socket.IPPROTO_ICMP)
-        s_tcp = self.get_socket(socket.IPPROTO_TCP)
 
         try:
             dst_ip = socket.gethostbyname(dst_ip)
@@ -138,21 +134,17 @@ class TCPing:
         ack_num = seq_num + 1
         src_tcp = TCP_data(src_port, dst_port, ack_num, 0)
         src_ip = IP_data(0, src_ip, dst_ip)
-        s_tcp.sendto(packet, (dst_ip, dst_port))
+        self.network.send(packet, (dst_ip, dst_port))
         start_time = time.monotonic()
 
-        with s_tcp:
-            with s_icmp:
-                res = self.get_result(
-                        s_tcp,
-                        s_icmp,
-                        src_ip,
-                        src_tcp,
-                        response_time,
-                        start_time)
+        res = self.get_result(
+                src_ip,
+                src_tcp,
+                response_time,
+                start_time)
 
-                if time.monotonic() - start_time <= response_time:
-                    result.append(res)
+        if time.monotonic() - start_time <= response_time:
+            result.append(res)
 
     def ping(self, ip, port, packets_amount, send_interval, response_time):
         result = []
