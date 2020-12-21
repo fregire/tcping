@@ -156,8 +156,9 @@ def unpack_ip(packet):
     mac_header = packet[:eth_len]
     ip_header = packet[eth_len: 20 + eth_len]
     ip_header = unpack('!BBHHHBBH4s4s', ip_header)
+    ip_proto = ip_header[6]
     ip_header_len = (ip_header[0] & 0xF) * 4
     src_ip = socket.inet_ntoa(ip_header[8])
     dst_ip = socket.inet_ntoa(ip_header[9])
 
-    return IP_data(ip_header_len, src_ip, dst_ip)
+    return IP_data(ip_header_len, ip_proto, src_ip, dst_ip)

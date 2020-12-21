@@ -10,7 +10,7 @@ import threading
 import statistics
 from .crafter import *
 from .statistics import Stat
-from .structures import TCP_data, IP_data, Result, State
+from .structures import TCP_data, IP_data, Result, State, Protos
 from .network import Network
 
 
@@ -97,7 +97,7 @@ class TCPing:
                 return Result(State.ABORTED, time.monotonic() - start_time)
             res = self.network.recv()
             if res:
-                data, addr, is_icmp = res
+                data, addr = res
             else:
                 continue
             ip_data = unpack_ip(data)
@@ -105,11 +105,11 @@ class TCPing:
             res = None
 
             if self.is_ip_packets_matches(src_ip, ip_data):
-                if not is_icmp:
+                if ip_data.proto == Protos.TCP:
                     recvd_tcp = unpack_tcp(ip_load[0: 20])
                     res = self.handle_tcp(recvd_tcp, src_tcp, start_time)
 
-                if is_icmp:
+                if ip_data.proto == Protos.ICMP:
                     res = self.handle_icmp(ip_load, start_time)
 
                 if res:
@@ -133,12 +133,12 @@ class TCPing:
             dst_port)
         ack_num = seq_num + 1
         src_tcp = TCP_data(src_port, dst_port, ack_num, 0)
-        src_ip = IP_data(0, src_ip, dst_ip)
+        src_ip_packet = IP_data(0, 6, src_ip, dst_ip)
         self.network.send(packet, (dst_ip, dst_port))
         start_time = time.monotonic()
 
         res = self.get_result(
-                src_ip,
+                src_ip_packet,
                 src_tcp,
                 response_time,
                 start_time)

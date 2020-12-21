@@ -27,7 +27,7 @@ class Network:
                     if reader is self.s_icmp:
                         is_icmp = True
 
-                    return data, addr, is_icmp
+                    return data, addr
 
     def send(self, data, addr):
         self.s_tcp.sendto(data, addr)
