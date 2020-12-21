@@ -1,7 +1,7 @@
 from .structures import *
 
 
-class Loss_percent_stat():
+class LossPercentStat:
     def __init__(self):
         self.res_count = 0
         self.loss_count = 0
@@ -15,13 +15,10 @@ class Loss_percent_stat():
         return (self.loss_count / self.res_count) * 100
 
     def get_formatted_res(self):
-        return f'{int(self.get_result())} % loss'
-    # str в get_formatted_res
-    def __str__(self):
-        return "Loss percent"
+        return f'Loss percent: {int(self.get_result())} % loss'
 
 
-class Min_time_stat():
+class MinTimeStat:
     def __init__(self):
         self.min_time = None
 
@@ -29,17 +26,14 @@ class Min_time_stat():
         if result.state is State.ABORTED:
             return
 
-        if not self.min_time or result.response_time < self.min_time :
+        if not self.min_time or result.response_time < self.min_time:
             self.min_time = result.response_time
 
     def get_formatted_res(self):
-        return str(self.min_time)
-
-    def __str__(self):
-        return "Min response time"
+        return f'Min response time: {self.min_time}'
 
 
-class Max_time_stat():
+class MaxTimeStat:
     def __init__(self):
         self.max_time = None
 
@@ -51,13 +45,10 @@ class Max_time_stat():
             self.max_time = result.response_time
 
     def get_formatted_res(self):
-        return str(self.max_time)
-
-    def __str__(self):
-        return "Max response time"
+        return f'Max response time: {self.max_time}'
 
 
-class Average_stat():
+class AverageStat:
     def __init__(self):
         self.average_time = 0
         self.res_count = 0
@@ -71,21 +62,17 @@ class Average_stat():
             + result.response_time)
 
     def get_formatted_res(self):
-        return str(self.average_time)
+        return f'Average response time: {self.average_time}'
 
-    def __str__(self):
-        return "Average response time"
 
-# именование классов статистик
-# class name без скобок
-class Stat():
+class Stat:
     def __init__(self):
         self.results = []
         self.stats = [
-            Loss_percent_stat(),
-            Min_time_stat(),
-            Max_time_stat(),
-            Average_stat()]
+            LossPercentStat(),
+            MinTimeStat(),
+            MaxTimeStat(),
+            AverageStat()]
 
     def update(self, result):
         self.results.append(result)
@@ -97,6 +84,6 @@ class Stat():
         res = ''
 
         for stat in self.stats:
-            res += f'{stat}: {stat.get_formatted_res()} \n'
+            res += f'{stat.get_formatted_res()} \n'
 
         return res
