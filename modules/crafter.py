@@ -2,7 +2,7 @@ from struct import unpack, pack
 import socket
 from collections import namedtuple
 import random
-from .structures import TCP_data, IP_data
+from .structures import TCP_data, IP_data, ICMP_data
 
 
 def get_checksum(header):
@@ -161,4 +161,19 @@ def unpack_ip(packet):
     src_ip = socket.inet_ntoa(ip_header[8])
     dst_ip = socket.inet_ntoa(ip_header[9])
 
-    return IP_data(ip_header_len, ip_proto, src_ip, dst_ip)
+    return IP_data(
+        ip_header_len,
+        ip_proto,
+        src_ip,
+        dst_ip,
+        packet[ip_header_len:])
+
+
+def unpack_icmp(packet):
+    icmp = unpack('!BBHI', packet[:8])
+    icmp_type = icmp[0]
+    icmp_load = b''
+    if icmp_type == 3:
+        icmp_load = packet[8:]
+
+    return ICMP_data(icmp_type, icmp_load)

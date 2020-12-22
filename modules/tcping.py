@@ -77,13 +77,30 @@ class TCPing:
             else:
                 return Result(State.OK, time.monotonic() - start_time)
 
-    def handle_icmp(self, packet, start_time):
-        icmp_type = packet[0]
-
-        if self.is_unreachable(icmp_type):
-            return Result(State.NOT_ALLOWED, time.monotonic() - start_time)
+    def handle_icmp(self, recvd_icmp, src_ip, start_time):
+        icmp_data = unpack_icmp(recvd_icmp)
+        if self.is_unreachable(icmp_data.type):
+            ip_data = unpack_ip(icmp_data.load)
+            if (src_ip.src_ip == ip_data.src_ip and
+                src_ip.dst_ip == ip_data.dst_ip):
+                return Result(State.NOT_ALLOWED, time.monotonic() - start_time)
         else:
             return Result(State.OK, time.monotonic() - start_time)
+
+    def handle_packet(self, data, src_ip, src_tcp, start_time):
+        ip_data = unpack_ip(data)
+        result = None
+
+        if ip_data.proto == Protos.TCP:
+            if self.is_ip_packets_matches(src_ip, ip_data):
+                recvd_tcp = unpack_tcp(ip_data.load[0: 20])
+                result = self.handle_tcp(recvd_tcp, src_tcp, start_time)
+
+        if ip_data.proto == Protos.ICMP:
+            result = self.handle_icmp(ip_data.load, src_ip, start_time)
+
+        if result:
+            return result
 
     def get_result(
         self,
@@ -95,25 +112,16 @@ class TCPing:
         while True:
             if time.monotonic() - start_time > response_time:
                 return Result(State.ABORTED, time.monotonic() - start_time)
-            res = self.network.recv()
-            if res:
-                data, addr = res
+            recvd = self.network.recv()
+            if recvd:
+                data, addr = recvd
             else:
                 continue
-            ip_data = unpack_ip(data)
-            ip_load = data[ip_data.len:]
-            res = None
 
-            if self.is_ip_packets_matches(src_ip, ip_data):
-                if ip_data.proto == Protos.TCP:
-                    recvd_tcp = unpack_tcp(ip_load[0: 20])
-                    res = self.handle_tcp(recvd_tcp, src_tcp, start_time)
+            res = self.handle_packet(data, src_ip, src_tcp, start_time)
 
-                if ip_data.proto == Protos.ICMP:
-                    res = self.handle_icmp(ip_load, start_time)
-
-                if res:
-                    return res
+            if res:
+                return res
 
     def get_response(self, ip, port, result, response_time):
         dst_ip = ip
@@ -133,7 +141,7 @@ class TCPing:
             dst_port)
         ack_num = seq_num + 1
         src_tcp = TCP_data(src_port, dst_port, ack_num, 0)
-        src_ip_packet = IP_data(0, 6, src_ip, dst_ip)
+        src_ip_packet = IP_data(0, 6, src_ip, dst_ip, b'')
         self.network.send(packet, (dst_ip, dst_port))
         start_time = time.monotonic()
 
