@@ -23,10 +23,6 @@ class Network:
                 data, addr = reader.recvfrom(65565)
 
                 if data:
-                    is_icmp = False
-                    if reader is self.s_icmp:
-                        is_icmp = True
-
                     return data, addr
 
     def send(self, data, addr):
