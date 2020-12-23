@@ -52,14 +52,6 @@ class TCPing:
         return icmp_type == 3
 
     @staticmethod
-    def get_socket(sock_proto):
-        s = socket.socket(socket.AF_INET, socket.SOCK_RAW, sock_proto)
-        s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-        s.setblocking(0)
-
-        return s
-
-    @staticmethod
     def is_tcp_packets_matches(request, response):
         return (request.ack == response.ack and
                 request.sport == response.dport and
