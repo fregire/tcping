@@ -10,7 +10,7 @@ import threading
 import statistics
 from .crafter import *
 from .statistics import Stat
-from .structures import TCP_data, IP_data, Result, State, Protos
+from .structures import TCP, IP, Result, State, Protos
 from .network import Network
 
 
@@ -33,10 +33,10 @@ class TCPing:
         return f'{STATES_NAMES[result.state]} {result.response_time}'
 
     @staticmethod
-    def get_curr_addr(dst_ip, dst_port):
+    def get_curr_addr(dst_ip, dport):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            s.connect((dst_ip, dst_port))
+            s.connect((dst_ip, dport))
             ip = s.getsockname()[0]
             port = s.getsockname()[1]
         except Exception:
@@ -62,13 +62,13 @@ class TCPing:
     @staticmethod
     def is_tcp_packets_matches(request, response):
         return (request.ack == response.ack and
-                request.src_port == response.dst_port and
-                request.dst_port == response.src_port)
+                request.sport == response.dport and
+                request.dport == response.sport)
 
     @staticmethod
     def is_ip_packets_matches(request, response):
-        return (request.src_ip == response.dst_ip and
-                request.dst_ip == response.src_ip)
+        return (request.src == response.dst and
+                request.dst == response.src)
 
     def handle_tcp(self, recvd_tcp, src_tcp, start_time):
         if self.is_tcp_packets_matches(src_tcp, recvd_tcp):
@@ -80,24 +80,24 @@ class TCPing:
     def handle_icmp(self, recvd_icmp, src_ip, start_time):
         icmp_data = unpack_icmp(recvd_icmp)
         if self.is_unreachable(icmp_data.type):
-            ip_data = unpack_ip(icmp_data.load)
-            if (src_ip.src_ip == ip_data.src_ip and
-                src_ip.dst_ip == ip_data.dst_ip):
+            IP = unpack_ip(icmp_data.load)
+            if (src_ip.src == IP.src and
+                src_ip.dst == IP.dst):
                 return Result(State.NOT_ALLOWED, time.monotonic() - start_time)
         else:
             return Result(State.OK, time.monotonic() - start_time)
 
     def handle_packet(self, data, src_ip, src_tcp, start_time):
-        ip_data = unpack_ip(data)
+        IP = unpack_ip(data)
         result = None
 
-        if ip_data.proto == Protos.TCP:
-            if self.is_ip_packets_matches(src_ip, ip_data):
-                recvd_tcp = unpack_tcp(ip_data.load[0: 20])
+        if IP.proto == Protos.TCP:
+            if self.is_ip_packets_matches(src_ip, IP):
+                recvd_tcp = unpack_tcp(IP.load[0: 20])
                 result = self.handle_tcp(recvd_tcp, src_tcp, start_time)
 
-        if ip_data.proto == Protos.ICMP:
-            result = self.handle_icmp(ip_data.load, src_ip, start_time)
+        if IP.proto == Protos.ICMP:
+            result = self.handle_icmp(IP.load, src_ip, start_time)
 
         if result:
             return result
@@ -125,7 +125,7 @@ class TCPing:
 
     def get_response(self, ip, port, result, response_time):
         dst_ip = ip
-        dst_port = port
+        dport = port
 
         try:
             dst_ip = socket.gethostbyname(dst_ip)
@@ -133,16 +133,16 @@ class TCPing:
             result.append(Result(State.ABORTED, 0))
             return
 
-        src_ip, src_port = self.get_curr_addr(dst_ip, dst_port)
+        src_ip, sport = self.get_curr_addr(dst_ip, dport)
         packet, seq_num = get_tcp_packet(
             src_ip,
-            src_port,
+            sport,
             dst_ip,
-            dst_port)
+            dport)
         ack_num = seq_num + 1
-        src_tcp = TCP_data(src_port, dst_port, ack_num, 0)
-        src_ip_packet = IP_data(0, 6, src_ip, dst_ip, b'')
-        self.network.send(packet, (dst_ip, dst_port))
+        src_tcp = TCP(sport, dport, ack_num, 0)
+        src_ip_packet = IP(0, 6, src_ip, dst_ip, b'')
+        self.network.send(packet, (dst_ip, dport))
         start_time = time.monotonic()
 
         res = self.get_result(
