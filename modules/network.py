@@ -36,4 +36,4 @@ class Network:
                 return result, time.monotonic() - start_time
 
     def send(self, data, addr):
-        self.s_tcp.sendto(data, addr)
+        self.s_tcp.send(data)

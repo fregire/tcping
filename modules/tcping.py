@@ -95,47 +95,6 @@ class TCPing:
 
         return result
 
-    def get_response(self, ip, port, response_time):
-        packets = self.get_send_packet(ip, port)
-
-        if not packets:
-            return Result(State.ABORTED, 0)
-
-        packet, ip_pack, tcp_pack = packets
-        self.network.send(packet, (ip, port))
-        start_time = time.monotonic()
-
-        return self.get_result(
-                ip_pack,
-                tcp_pack,
-                response_time,
-                start_time)
-
-    def get_result(
-        self,
-        ip_pack,
-        tcp_pack,
-        response_time,
-        start_time=time.monotonic()):
-
-        while True:
-            if response_time <= 0:
-                return Result(State.ABORTED, response_time)
-
-            packets, elapsed_time = self.network.recv(response_time)
-
-            if packets:
-                for packet in packets:
-                    res = self.handle_packet(packet, ip_pack, tcp_pack, start_time)
-
-                    if res:
-                        return res
-
-            if elapsed_time == response_time and not packets:
-                return Result(State.ABORTED, response_time)
-
-            response_time -= elapsed_time
-
     def get_send_packet(self, ip, port):
         dst_ip = ip
         dport = port
@@ -181,6 +140,7 @@ class TCPing:
             if send_counter == packets_amount and not match_packs:
                 break
 
+            # Выбираем таймаут чтения данных
             if curr_interval != 0:
                 timeout = curr_interval
             for match_pack in match_packs:
@@ -215,8 +175,8 @@ class TCPing:
                 for match_pack in match_packs:
                     start_time = match_packs[match_pack][0]
                     res = self.handle_packet(
-                        pack, 
-                        match_pack, 
+                        pack,
+                        match_pack,
                         start_time)
 
                     if res:
