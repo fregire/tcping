@@ -20,6 +20,8 @@ STATES_NAMES = {
     State.NOT_ALLOWED: 'Not allowed'
 }
 
+Packet = namedtuple('Packet', ['all', 'ip', 'tcp'])
+
 
 class TCPing:
     def __init__(self):
@@ -79,51 +81,69 @@ class TCPing:
         else:
             return Result(State.OK, time.monotonic() - start_time)
 
-    def handle_packet(self, data, src_ip, src_tcp, start_time):
+    def handle_packet(self, data, src_pack, start_time):
         IP = unpack_ip(data)
         result = None
 
         if IP.proto == Protos.TCP:
-            if self.is_ip_packets_matches(src_ip, IP):
+            if self.is_ip_packets_matches(src_pack.ip, IP):
                 recvd_tcp = unpack_tcp(IP.load[0: 20])
-                result = self.handle_tcp(recvd_tcp, src_tcp, start_time)
+                result = self.handle_tcp(recvd_tcp, src_pack.tcp, start_time)
 
         if IP.proto == Protos.ICMP:
-            result = self.handle_icmp(IP.load, src_ip, start_time)
+            result = self.handle_icmp(IP.load, src_pack.ip, start_time)
 
-        if result:
-            return result
+        return result
+
+    def get_response(self, ip, port, response_time):
+        packets = self.get_send_packet(ip, port)
+
+        if not packets:
+            return Result(State.ABORTED, 0)
+
+        packet, ip_pack, tcp_pack = packets
+        self.network.send(packet, (ip, port))
+        start_time = time.monotonic()
+
+        return self.get_result(
+                ip_pack,
+                tcp_pack,
+                response_time,
+                start_time)
 
     def get_result(
         self,
-        src_ip,
-        src_tcp,
+        ip_pack,
+        tcp_pack,
         response_time,
         start_time=time.monotonic()):
 
         while True:
-            if time.monotonic() - start_time > response_time:
-                return Result(State.ABORTED, time.monotonic() - start_time)
-            recvd = self.network.recv()
-            if recvd:
-                data, addr = recvd
-            else:
-                continue
+            if response_time <= 0:
+                return Result(State.ABORTED, response_time)
 
-            res = self.handle_packet(data, src_ip, src_tcp, start_time)
+            packets, elapsed_time = self.network.recv(response_time)
 
-            if res:
-                return res
+            if packets:
+                for packet in packets:
+                    res = self.handle_packet(packet, ip_pack, tcp_pack, start_time)
 
-    def get_response(self, ip, port, result, response_time):
+                    if res:
+                        return res
+
+            if elapsed_time == response_time and not packets:
+                return Result(State.ABORTED, response_time)
+
+            response_time -= elapsed_time
+
+    def get_send_packet(self, ip, port):
         dst_ip = ip
         dport = port
 
         try:
             dst_ip = socket.gethostbyname(dst_ip)
         except socket.gaierror:
-            result.append(Result(State.ABORTED, 0))
-            return
+            return None
 
         src_ip, sport = self.get_curr_addr(dst_ip, dport)
         packet, seq_num = get_tcp_packet(
@@ -132,46 +152,77 @@ class TCPing:
             dst_ip,
             dport)
         ack_num = seq_num + 1
-        src_tcp = TCP(sport, dport, ack_num, 0)
-        src_ip_packet = IP(0, 6, src_ip, dst_ip, b'')
-        self.network.send(packet, (dst_ip, dport))
-        start_time = time.monotonic()
+        ip_pack = IP(0, 6, src_ip, dst_ip, b'')
+        tcp_pack = TCP(sport, dport, ack_num, 0)
 
-        res = self.get_result(
-                src_ip_packet,
-                src_tcp,
-                response_time,
-                start_time)
-
-        if time.monotonic() - start_time <= response_time:
-            result.append(res)
+        return Packet(packet, ip_pack, tcp_pack)
 
     def ping(self, ip, port, packets_amount, send_interval, response_time):
         result = []
         inited = False
         stat = Stat()
-        # мин времея отправки и интервала отправки через селект с временем
-        for _ in range(packets_amount):
-            if inited:
-                time.sleep(send_interval)
-            else:
-                inited = True
+        match_packs = {}
+        curr_interval = 0
+        send_counter = 0
+        timeout = min(response_time, send_interval)
 
-            th = threading.Thread(
-                target=self.get_response,
-                args=(ip, port, result, response_time),
-                daemon=True)
-            th.start()
-            th.join(timeout=response_time)
+        while True:
+            if curr_interval <= 0 and send_counter < packets_amount:
+                curr_interval = send_interval
+                packet = self.get_send_packet(ip, port)
 
-            repsonse_res = Result(State.ABORTED, 0)
+                if not packet:
+                    print(self.get_formatted_result(Result(State.ABORTED, 0)))
 
-            if result:
-                repsonse_res = result[0]
+                self.network.send(packet.all, (ip, port))
+                match_packs.update({packet: (time.monotonic(), response_time)})
+                send_counter += 1
 
-            stat.update(repsonse_res)
-            print(self.get_formatted_result(repsonse_res))
+            if send_counter == packets_amount and not match_packs:
+                break
 
-            result.clear()
+            if curr_interval != 0:
+                timeout = curr_interval
+            for match_pack in match_packs:
+                timeout = min(match_packs[match_pack][1], timeout)
 
-        print(stat.get_formatted_res())
+            # Получаем пакеты с таймаутом
+            packets, elapsed_time = self.network.recv(timeout)
+            curr_interval -= elapsed_time
+
+            # Удаляем пакеты, которые уже превысили время ответа
+            packets_to_delete = []
+            for match_pack in match_packs:
+                start_time = match_packs[match_pack][0]
+                pack_resp = match_packs[match_pack][1] - elapsed_time
+                match_packs[match_pack] = (start_time, pack_resp)
+
+                if pack_resp <= 0:
+                    print(self.get_formatted_result(
+                        Result(State.ABORTED, 0)))
+                    packets_to_delete.append(match_pack)
+                    continue
+
+            for match_pack in packets_to_delete:
+                del match_packs[match_pack]
+            packets_to_delete.clear()
+
+            if not packets:
+                continue
+
+            # Смотрим какие пакеты нам подходят
+            for pack in packets:
+                for match_pack in match_packs:
+                    start_time = match_packs[match_pack][0]
+                    res = self.handle_packet(
+                        pack, 
+                        match_pack, 
+                        start_time)
+
+                    if res:
+                        packets_to_delete.append(match_pack)
+                        print(self.get_formatted_result(res))
+
+                # Удаляем пакеты, на которые есть ответ
+                for match_pack in packets_to_delete:
+                    del match_packs[match_pack]

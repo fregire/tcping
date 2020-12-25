@@ -1,5 +1,6 @@
 import socket
 import select
+import time
 
 
 class Network:
@@ -15,15 +16,24 @@ class Network:
 
         return s
 
-    def recv(self):
+    def recv(self, timeout):
+        start_time = time.monotonic()
+        result = []
+
         while True:
-            readers, _, _ = select.select([self.s_icmp, self.s_tcp], [], [])
+            readers, _, _ = select.select(
+                [self.s_icmp, self.s_tcp],
+                [],
+                [],
+                timeout)
+            if not readers:
+                return None, timeout
+            else:
+                for reader in readers:
+                    data, addr = reader.recvfrom(65565)
+                    result.append(data)
 
-            for reader in readers:
-                data, addr = reader.recvfrom(65565)
-
-                if data:
-                    return data, addr
+                return result, time.monotonic() - start_time
 
     def send(self, data, addr):
         self.s_tcp.sendto(data, addr)
