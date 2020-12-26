@@ -26,9 +26,9 @@ Packet = namedtuple('Packet', ['all', 'ip', 'tcp'])
 
 
 class TCPing:
-    def __init__(self):
+    def __init__(self, hide_succ_pings=False):
         self.network = Network()
-
+        self.hide_succ_pings = hide_succ_pings
 
     @staticmethod
     def get_formatted_time(t):
@@ -200,5 +200,10 @@ class TCPing:
 
             for result in results:
                 stat.update(result)
+
+                if result.state == State.OK and self.hide_succ_pings:
+                    continue
+
                 print(self.get_formatted_result(result))
+
         print(stat.get_formatted_result())

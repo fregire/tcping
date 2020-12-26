@@ -32,12 +32,18 @@ def parse_args():
         default=5,
         help='Интервал отправки пакетов',
         type=float)
+    parser.add_argument(
+        '-hp',
+        '--hide-succ-pings',
+        help='Скрыть успешные пинги',
+        action='store_true')
+
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    tcping.TCPing().ping(
+    tcping.TCPing(args.hide_succ_pings).ping(
         args.ip,
         args.port,
         args.amount,
