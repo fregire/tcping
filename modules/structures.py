@@ -11,7 +11,8 @@ class State:
     NOT_ALLOWED = 0
     OK = 1
     ERROR = 2,
-    TIMEOUT = 3
+    TIMEOUT = 3,
+    UNREACHABLE = 4
 
 
 class Protos:

@@ -1,6 +1,10 @@
 from .structures import State, Result
 
 
+def get_formatted_time(t):
+    return '{:.4f}'.format(t)
+
+
 class LossPercentStat:
     def __init__(self):
         self.res_count = 0
@@ -8,13 +12,13 @@ class LossPercentStat:
 
     def update(self, result):
         self.res_count += 1
-        if result.state is State.ABORTED:
+        if result.state is State.TIMEOUT:
             self.loss_count += 1
 
     def get_result(self):
         return (self.loss_count / self.res_count) * 100
 
-    def get_formatted_res(self):
+    def get_formatted_result(self):
         return f'Loss percent: {int(self.get_result())} % loss'
 
 
@@ -23,14 +27,14 @@ class MinTimeStat:
         self.min_time = None
 
     def update(self, result):
-        if result.state is State.ABORTED:
+        if not result.response_time:
             return
 
         if not self.min_time or result.response_time < self.min_time:
             self.min_time = result.response_time
 
-    def get_formatted_res(self):
-        return f'Min response time: {self.min_time}'
+    def get_formatted_result(self):
+        return f'Min response time: {get_formatted_time(self.min_time)}'
 
 
 class MaxTimeStat:
@@ -38,14 +42,14 @@ class MaxTimeStat:
         self.max_time = None
 
     def update(self, result):
-        if result.state is State.ABORTED:
+        if not result.response_time:
             return
 
         if not self.max_time or result.response_time > self.max_time:
             self.max_time = result.response_time
 
-    def get_formatted_res(self):
-        return f'Max response time: {self.max_time}'
+    def get_formatted_result(self):
+        return f'Max response time: {get_formatted_time(self.max_time)}'
 
 
 class AverageStat:
@@ -54,15 +58,16 @@ class AverageStat:
         self.res_count = 0
 
     def update(self, result):
-        if result.state is State.ABORTED:
+        if not result.response_time:
             return
 
         self.average_time = (
             self.average_time * self.res_count
             + result.response_time)
 
-    def get_formatted_res(self):
-        return f'Average response time: {self.average_time}'
+    def get_formatted_result(self):
+        return f'Average response time: ' \
+                f'{get_formatted_time(self.average_time)}'
 
 
 class Stat:
@@ -80,10 +85,10 @@ class Stat:
         for stat in self.stats:
             stat.update(result)
 
-    def get_formatted_res(self):
+    def get_formatted_result(self):
         res = ''
 
         for stat in self.stats:
-            res += f'{stat.get_formatted_res()} \n'
+            res += f'{stat.get_formatted_result()} \n'
 
         return res

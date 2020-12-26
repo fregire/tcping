@@ -17,6 +17,7 @@ from .network import Network
 STATES_NAMES = {
     State.TIMEOUT: 'Timeout',
     State.ERROR: 'Something goes wrong',
+    State.UNREACHABLE: 'Host unreachable',
     State.OK: 'Ok',
     State.NOT_ALLOWED: 'Not allowed'
 }
@@ -28,11 +29,15 @@ class TCPing:
     def __init__(self):
         self.network = Network()
 
+
     @staticmethod
-    def get_formatted_result(result):
+    def get_formatted_time(t):
+        return '{:.4f}'.format(t)
+
+    def get_formatted_result(self, result):
         if result.state == State.TIMEOUT or result.state == State.ERROR:
             return STATES_NAMES[result.state]
-        formatted_time = '{:.4f}'.format(result.response_time)
+        formatted_time = self.get_formatted_time(result.response_time)
 
         return f'{STATES_NAMES[result.state]} {formatted_time}'
 
@@ -79,13 +84,14 @@ class TCPing:
             IP = unpack_ip(icmp_data.load)
             if (src_ip.src == IP.src and
                 src_ip.dst == IP.dst):
-                return Result(State.NOT_ALLOWED, time.monotonic() - start_time)
+                return Result(State.UNREACHABLE, time.monotonic() - start_time)
         else:
             return Result(State.OK, time.monotonic() - start_time)
 
     def handle_packet(self, data, src_pack, start_time):
         IP = unpack_ip(data)
         result = None
+
         if IP.proto == Protos.TCP:
             if self.is_ip_packets_matches(src_pack.ip, IP):
                 recvd_tcp = unpack_tcp(IP.load[0: 20])
@@ -117,6 +123,48 @@ class TCPing:
 
         return Packet(packet, ip_pack, tcp_pack)
 
+    def get_result(self, match_packs, timeout):
+        result = []
+        packets, elapsed_time = self.network.recv(timeout)
+
+        # Удаляем пакеты, которые уже превысили время ответа
+        packets_to_delete = []
+        for match_pack in match_packs:
+            start_time = match_packs[match_pack][0]
+            pack_resp = match_packs[match_pack][1] - elapsed_time
+            match_packs[match_pack] = (start_time, pack_resp)
+
+            if pack_resp <= 0:
+                result.append(Result(State.TIMEOUT, None))
+                packets_to_delete.append(match_pack)
+                continue
+
+        for match_pack in packets_to_delete:
+            del match_packs[match_pack]
+        packets_to_delete.clear()
+
+        if not packets:
+            return result, elapsed_time
+
+        # Смотрим какие пакеты нам подходят
+        for pack in packets:
+            for match_pack in match_packs:
+                start_time = match_packs[match_pack][0]
+                res = self.handle_packet(
+                    pack,
+                    match_pack,
+                    start_time)
+
+                if res:
+                    result.append(res)
+                    packets_to_delete.append(match_pack)
+
+            # Удаляем пакеты, на которые есть ответ
+            for match_pack in packets_to_delete:
+                del match_packs[match_pack]
+
+        return result, elapsed_time
+
     def ping(self, ip, port, packets_amount, send_interval, response_time):
         result = []
         inited = False
@@ -132,7 +180,7 @@ class TCPing:
                 packet = self.get_send_packet(ip, port)
 
                 if not packet:
-                    print(self.get_formatted_result(Result(State.ERROR, 0)))
+                    print(self.get_formatted_result(Result(State.ERROR, None)))
 
                 self.network.send(packet.all, (ip, port))
                 match_packs.update({packet: (time.monotonic(), response_time)})
@@ -147,43 +195,10 @@ class TCPing:
             for match_pack in match_packs:
                 timeout = min(match_packs[match_pack][1], timeout)
 
-            # Получаем пакеты с таймаутом
-            packets, elapsed_time = self.network.recv(timeout)
+            results, elapsed_time = self.get_result(match_packs, timeout)
             curr_interval -= elapsed_time
 
-            # Удаляем пакеты, которые уже превысили время ответа
-            packets_to_delete = []
-            for match_pack in match_packs:
-                start_time = match_packs[match_pack][0]
-                pack_resp = match_packs[match_pack][1] - elapsed_time
-                match_packs[match_pack] = (start_time, pack_resp)
-
-                if pack_resp <= 0:
-                    print(self.get_formatted_result(
-                        Result(State.TIMEOUT, 0)))
-                    packets_to_delete.append(match_pack)
-                    continue
-
-            for match_pack in packets_to_delete:
-                del match_packs[match_pack]
-            packets_to_delete.clear()
-
-            if not packets:
-                continue
-
-            # Смотрим какие пакеты нам подходят
-            for pack in packets:
-                for match_pack in match_packs:
-                    start_time = match_packs[match_pack][0]
-                    res = self.handle_packet(
-                        pack,
-                        match_pack,
-                        start_time)
-
-                    if res:
-                        packets_to_delete.append(match_pack)
-                        print(self.get_formatted_result(res))
-
-                # Удаляем пакеты, на которые есть ответ
-                for match_pack in packets_to_delete:
-                    del match_packs[match_pack]
+            for result in results:
+                stat.update(result)
+                print(self.get_formatted_result(result))
+        print(stat.get_formatted_result())
