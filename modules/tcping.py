@@ -32,8 +32,9 @@ class TCPing:
     def get_formatted_result(result):
         if result.state == State.TIMEOUT or result.state == State.ERROR:
             return STATES_NAMES[result.state]
+        formatted_time = '{:.4f}'.format(result.response_time)
 
-        return f'{STATES_NAMES[result.state]} {result.response_time}'
+        return f'{STATES_NAMES[result.state]} {formatted_time}'
 
     @staticmethod
     def get_curr_addr(dst_ip, dport):
