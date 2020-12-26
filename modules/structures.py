@@ -10,7 +10,8 @@ Result = namedtuple('Result', ['state', 'response_time'])
 class State:
     NOT_ALLOWED = 0
     OK = 1
-    ABORTED = 2
+    ERROR = 2,
+    TIMEOUT = 3
 
 
 class Protos:

@@ -21,24 +21,22 @@ def get_checksum(header):
     return result
 
 
-def get_ip_header(src_ip, dst_ip, proto=socket.IPPROTO_TCP):
+def get_ip_header(
+    src_ip, 
+    dst_ip, 
+    proto=socket.IPPROTO_TCP,
+    version=4,
+    ihl=5,
+    identificator=1,
+    flags=2,
+    ttl=255,
+    packet_len=20):
     IP_HEADER_MASK = '!BBHHHBBH4s4s'
-    version = 4
-    ihl = 5
     version_ihl = (version << 4) + ihl
     dscp_ecn = 0
-    packet_len = 20
-    identificator = 1
-
-    # flags
-    first_flag = 0
-    df = 1
-    mf = 0
-    flags = (df << 1) + mf
 
     fragment_offset = 0
     flags_offset = (flags << 13) + fragment_offset
-    ttl = 255
     checksum = 0
     src_ip = socket.inet_aton(src_ip)
     dst_ip = socket.inet_aton(dst_ip)
@@ -65,7 +63,8 @@ def get_tcp_header(
     dst_ip,
     dst_port,
     seq_num,
-    window_size=64240):
+    window_size=64240,
+    flags=2):
     src_ip = socket.inet_aton(src_ip)
     dst_ip = socket.inet_aton(dst_ip)
 
@@ -73,22 +72,6 @@ def get_tcp_header(
     header_len = 5
     reservered = 0
     ack_num = 0
-
-    # flags
-    urg = 0
-    ack_flag = 0
-    psh = 0
-    rst = 0
-    syn = 1
-    fin = 0
-
-    flags = (
-        (urg << 5) +
-        (ack_flag << 4) +
-        (psh << 3) +
-        (rst << 2) +
-        (syn << 1) +
-        fin)
 
     header_flags = (header_len << 12) + flags
     checksum = 0
@@ -128,8 +111,12 @@ def get_tcp_header(
         urgent_pointer)
 
 
-def get_tcp_packet(src_ip, src_port, dst_ip, dst_port):
-    seq_num = random.randint(1000, 0xFFFFFFFF - 1)
+def get_tcp_packet(
+    src_ip, 
+    src_port, 
+    dst_ip, 
+    dst_port, 
+    seq_num=random.randint(1000, 0xFFFFFFFF - 1)):
     ip_header = get_ip_header(src_ip, dst_ip)
     tcp_header = get_tcp_header(
         src_ip,

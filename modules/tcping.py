@@ -15,7 +15,8 @@ from .network import Network
 
 
 STATES_NAMES = {
-    State.ABORTED: 'Aborted',
+    State.TIMEOUT: 'Timeout',
+    State.ERROR: 'Something goes wrong',
     State.OK: 'Ok',
     State.NOT_ALLOWED: 'Not allowed'
 }
@@ -29,7 +30,7 @@ class TCPing:
 
     @staticmethod
     def get_formatted_result(result):
-        if result.state == State.ABORTED:
+        if result.state == State.TIMEOUT or result.state == State.ERROR:
             return STATES_NAMES[result.state]
 
         return f'{STATES_NAMES[result.state]} {result.response_time}'
@@ -84,7 +85,6 @@ class TCPing:
     def handle_packet(self, data, src_pack, start_time):
         IP = unpack_ip(data)
         result = None
-
         if IP.proto == Protos.TCP:
             if self.is_ip_packets_matches(src_pack.ip, IP):
                 recvd_tcp = unpack_tcp(IP.load[0: 20])
@@ -131,7 +131,7 @@ class TCPing:
                 packet = self.get_send_packet(ip, port)
 
                 if not packet:
-                    print(self.get_formatted_result(Result(State.ABORTED, 0)))
+                    print(self.get_formatted_result(Result(State.ERROR, 0)))
 
                 self.network.send(packet.all, (ip, port))
                 match_packs.update({packet: (time.monotonic(), response_time)})
@@ -159,7 +159,7 @@ class TCPing:
 
                 if pack_resp <= 0:
                     print(self.get_formatted_result(
-                        Result(State.ABORTED, 0)))
+                        Result(State.TIMEOUT, 0)))
                     packets_to_delete.append(match_pack)
                     continue
 

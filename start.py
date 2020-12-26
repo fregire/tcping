@@ -23,7 +23,7 @@ def parse_args():
     parser.add_argument(
         '-t',
         '--timeout',
-        default=2,
+        default=4,
         help='Время ожидания ответа',
         type=float)
     parser.add_argument(
