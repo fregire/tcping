@@ -15,7 +15,7 @@
 * Файл для запуска утилиты `start.py`
 
 ## Управление
-`python3 start.py [-h] [-a AMOUNT] [-t TIMEOUT] [-i INTERVAL] ip port`
+`python3 start.py [-h] [-a AMOUNT] [-t TIMEOUT] [-i INTERVAL] [-hp] ip port`
 
 Подробнее о параметрах можно узнать с помощью:
 `python3 start.py -h`
