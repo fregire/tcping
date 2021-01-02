@@ -24,22 +24,40 @@ STATES_NAMES = {
 
 Packet = namedtuple('Packet', ['all', 'ip', 'tcp'])
 
-
+# TODO: Обрабатывать несколько пар (ip, port) - список этих пар и по каждой паре отправляять пакеты
 class TCPing:
     def __init__(self, hide_succ_pings=False):
         self.network = Network()
         self.hide_succ_pings = hide_succ_pings
+        self.dns = {}
 
     @staticmethod
     def get_formatted_time(t):
         return '{:.4f}'.format(t)
 
+    @staticmethod
+    def get_formatted_addr(addr):
+        return f'{addr[0]}:{addr[1]}'
+
     def get_formatted_result(self, result):
         if result.state == State.TIMEOUT or result.state == State.ERROR:
             return STATES_NAMES[result.state]
         formatted_time = self.get_formatted_time(result.response_time)
+        addr = result.addr
+        url = self.get_url(result.addr[0])
+        if url:
+            addr = (url, result.addr[1])
+        formatted_addr = self.get_formatted_addr(addr)
 
-        return f'{STATES_NAMES[result.state]} {formatted_time}'
+        return f'{STATES_NAMES[result.state]} ' \
+            f'{formatted_time} {formatted_addr}'
+
+    def update_dns(self, ip, url):
+        self.dns.update({ip: url})
+
+    def get_url(self, ip):
+        if ip in self.dns:
+            return self.dns[ip]
 
     @staticmethod
     def get_curr_addr(dst_ip, dport):
@@ -74,9 +92,9 @@ class TCPing:
     def handle_tcp(self, recvd_tcp, src_tcp, start_time):
         if self.is_tcp_packets_matches(src_tcp, recvd_tcp):
             if recvd_tcp.rst:
-                return Result(State.NOT_ALLOWED, time.monotonic() - start_time)
+                return State.NOT_ALLOWED, time.monotonic() - start_time
             else:
-                return Result(State.OK, time.monotonic() - start_time)
+                return State.OK, time.monotonic() - start_time
 
     def handle_icmp(self, recvd_icmp, src_ip, start_time):
         icmp_data = unpack_icmp(recvd_icmp)
@@ -84,9 +102,9 @@ class TCPing:
             IP = unpack_ip(icmp_data.load)
             if (src_ip.src == IP.src and
                 src_ip.dst == IP.dst):
-                return Result(State.UNREACHABLE, time.monotonic() - start_time)
+                return State.UNREACHABLE, time.monotonic() - start_time
         else:
-            return Result(State.OK, time.monotonic() - start_time)
+            return State.OK, time.monotonic() - start_time
 
     def handle_packet(self, data, src_pack, start_time):
         IP = unpack_ip(data)
@@ -100,7 +118,12 @@ class TCPing:
         if IP.proto == Protos.ICMP:
             result = self.handle_icmp(IP.load, src_pack.ip, start_time)
 
-        return result
+        if result:
+            state, elapsed_time = result
+            return Result(
+                state, 
+                elapsed_time, 
+                (src_pack.ip.dst, src_pack.tcp.dport))
 
     def get_send_packet(self, ip, port):
         dst_ip = ip
@@ -121,6 +144,9 @@ class TCPing:
         ip_pack = IP(0, 6, src_ip, dst_ip, b'')
         tcp_pack = TCP(sport, dport, ack_num, 0)
 
+        if ip != dst_ip:
+            self.update_dns(dst_ip, ip)
+
         return Packet(packet, ip_pack, tcp_pack)
 
     def get_result(self, match_packs, timeout):
@@ -135,7 +161,11 @@ class TCPing:
             match_packs[match_pack] = (start_time, pack_resp)
 
             if pack_resp <= 0:
-                result.append(Result(State.TIMEOUT, None))
+                result.append(
+                    Result(
+                        State.TIMEOUT, 
+                        None, 
+                        (match_pack.ip.dst, match_pack.tcp.dport)))
                 packets_to_delete.append(match_pack)
                 continue
 
@@ -165,7 +195,7 @@ class TCPing:
 
         return result, elapsed_time
 
-    def ping(self, ip, port, packets_amount, send_interval, response_time):
+    def ping(self, addrs, packets_amount, send_interval, response_time):
         result = []
         inited = False
         stat = Stat()
@@ -175,15 +205,24 @@ class TCPing:
         timeout = min(response_time, send_interval)
 
         while True:
+            # Если интервал прошел, то отправляем снова
             if curr_interval <= 0 and send_counter < packets_amount:
                 curr_interval = send_interval
-                packet = self.get_send_packet(ip, port)
 
-                if not packet:
-                    print(self.get_formatted_result(Result(State.ERROR, None)))
+                send_packs = []
+                for addr in addrs:
+                    packet = self.get_send_packet(addr[0], int(addr[1]))
 
-                self.network.send(packet.all, (ip, port))
-                match_packs.update({packet: (time.monotonic(), response_time)})
+                    if not packet:
+                        print(self.get_formatted_result(
+                            Result(State.ERROR, None, addr)))
+
+                    send_packs.append(packet)
+
+                for pack in send_packs:
+                    self.network.send(pack.all, (pack.ip.dst, pack.tcp.dport))
+                    match_packs.update({pack: (time.monotonic(), response_time)})
+
                 send_counter += 1
 
             if send_counter == packets_amount and not match_packs:

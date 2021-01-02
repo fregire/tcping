@@ -3,9 +3,26 @@ import argparse
 import socket
 
 
+DEFAULT_PORT = 80
+
+
+def valid_addr(addr):
+    try:
+        return addr.split(':')
+    except Exception as e:
+        msg = f'Not a valid address: {addr}'
+        raise  argparse.ArgumentTypeError(msg)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Аналог команды ping с помощью tcp')
+    parser.add_argument(
+        'addrs',
+        help='Адреса для пинга в формате ip:port',
+        type=valid_addr,
+        nargs='+')
+    '''
     parser.add_argument(
         'ip',
         help='IP адрес',
@@ -14,6 +31,7 @@ def parse_args():
         'port',
         help='Порт',
         type=int)
+    '''
     parser.add_argument(
         '-a',
         '--amount',
@@ -44,8 +62,7 @@ def parse_args():
 def main():
     args = parse_args()
     tcping.TCPing(args.hide_succ_pings).ping(
-        args.ip,
-        args.port,
+        args.addrs,
         args.amount,
         args.interval,
         args.timeout)

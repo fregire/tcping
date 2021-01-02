@@ -4,7 +4,7 @@ from collections import namedtuple
 TCP = namedtuple('TCP', ['sport', 'dport', 'ack', 'rst'])
 IP = namedtuple('IP', ['len', 'proto', 'src', 'dst', 'load'])
 ICMP = namedtuple('ICMP', ['type', 'load'])
-Result = namedtuple('Result', ['state', 'response_time'])
+Result = namedtuple('Result', ['state', 'response_time', 'addr'])
 
 
 class State:
