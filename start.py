@@ -22,16 +22,6 @@ def parse_args():
         help='Адреса для пинга в формате ip:port',
         type=valid_addr,
         nargs='+')
-    '''
-    parser.add_argument(
-        'ip',
-        help='IP адрес',
-        type=str)
-    parser.add_argument(
-        'port',
-        help='Порт',
-        type=int)
-    '''
     parser.add_argument(
         '-a',
         '--amount',
