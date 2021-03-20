@@ -32,6 +32,7 @@ class TCPing:
         self.network = Network()
         self.hide_succ_pings = hide_succ_pings
         self.dns = {}
+        self.stat = Stat()
 
     @staticmethod
     def get_formatted_time(t):
@@ -151,7 +152,7 @@ class TCPing:
 
     def get_results(self, match_packs, timeout):
         result = []
-        packets, elapsed_time = self.network.recv(timeout)
+        recvd_packets, elapsed_time = self.network.recv(timeout)
 
         # Удаляем пакеты, которые уже превысили время ответа
         packets_to_delete = []
@@ -173,11 +174,11 @@ class TCPing:
             del match_packs[match_pack]
         packets_to_delete.clear()
 
-        if not packets:
+        if not recvd_packets:
             return result, elapsed_time
 
         # Смотрим какие пакеты нам подходят
-        for pack in packets:
+        for pack in recvd_packets:
             for match_pack in match_packs:
                 start_time = match_packs[match_pack][0]
                 match_res = self.handle_packet(
@@ -195,14 +196,13 @@ class TCPing:
 
         return result, elapsed_time
 
-    def ping(self, addrs, packets_amount, send_interval, response_time):
+    def ping(self, addrs, packets_amount, send_interval, timeout):
         result = []
-        stat = Stat()
         match_packs = {}
         # Интервал времени отправки(который уменьшается)
         curr_interval = 0
         send_counter = 0
-        timeout = min(response_time, send_interval)
+        recv_packets_timeout = min(timeout, send_interval)
 
         while True:
             # Если интервал прошел, то отправляем снова
@@ -221,7 +221,7 @@ class TCPing:
 
                 for pack in send_packs:
                     self.network.send(pack.all, (pack.ip.dst, pack.tcp.dport))
-                    match_packs.update({pack: (time.monotonic(), response_time)})
+                    match_packs.update({pack: (time.monotonic(), timeout)})
 
                 send_counter += 1
 
@@ -229,20 +229,20 @@ class TCPing:
                 break
 
             # Выбираем таймаут чтения данных
-            if curr_interval != 0:
-                timeout = curr_interval
+            recv_packets_timeout = curr_interval
             for match_pack in match_packs:
-                timeout = min(match_packs[match_pack][1], timeout)
+                recv_packets_timeout = min(match_packs[match_pack][1], recv_packets_timeout)
 
-            results, elapsed_time = self.get_results(match_packs, timeout)
+            # TODO Подумать над рефакторингом get_results
+            results, elapsed_time = self.get_results(match_packs, recv_packets_timeout)
             curr_interval -= elapsed_time
 
             for result in results:
-                stat.update(result)
+                self.stat.update(result)
 
                 if result.state == State.OK and self.hide_succ_pings:
                     continue
 
                 print(self.get_formatted_result(result))
 
-        print(stat.get_formatted_result())
+        print(self.stat.get_formatted_result())

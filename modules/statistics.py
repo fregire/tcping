@@ -34,7 +34,10 @@ class MinTimeStat:
             self.min_time = result.response_time
 
     def get_formatted_result(self):
-        return f'Min response time: {get_formatted_time(self.min_time)}'
+        min_time = self.min_time
+        if not self.min_time:
+            min_time = 0
+        return f'Min response time: {get_formatted_time(min_time)}'
 
 
 class MaxTimeStat:
@@ -49,7 +52,10 @@ class MaxTimeStat:
             self.max_time = result.response_time
 
     def get_formatted_result(self):
-        return f'Max response time: {get_formatted_time(self.max_time)}'
+        max_time = self.max_time
+        if not self.max_time:
+            max_time = 0
+        return f'Max response time: {get_formatted_time(max_time)}'
 
 
 class AverageStat:
